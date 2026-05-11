@@ -1,5 +1,5 @@
 import { requireScreen } from '@/lib/auth/require-screen';
-import { CustomerForm } from './customer-form';
+import { CustomerForm } from '../customer-form';
 import { getTranslations } from 'next-intl/server';
 import Link from 'next/link';
 import { ChevronLeft } from 'lucide-react';

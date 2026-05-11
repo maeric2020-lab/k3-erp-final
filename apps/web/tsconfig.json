@@ -1,7 +1,8 @@
-{
+﻿{
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "plugins": [{ "name": "next" }],
+    "baseUrl": ".",
     "paths": {
       "@/*": ["./*"],
       "@k3/shared-types": ["../../packages/shared-types/src/index.ts"],

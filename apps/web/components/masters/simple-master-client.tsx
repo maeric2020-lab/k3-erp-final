@@ -28,7 +28,7 @@ export interface SimpleMasterClientProps<T extends { id: string; is_active?: boo
   total: number;
   columns: Column<T>[];
   fields: MasterField[];
-  apiPath: string; // e.g. '/api/masters/machine-categories'
+  apiPath: string;
   canAdd: boolean;
   canEdit: boolean;
   defaultValues: Record<string, any>;
@@ -120,7 +120,7 @@ export function SimpleMasterClient<T extends { id: string; is_active?: boolean }
                       onChange={(e) => setFormValues((s) => ({ ...s, [f.name]: e.target.value }))}
                       className="w-full h-10 px-3 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white"
                     >
-                      <option value="">â€”</option>
+                      <option value="">—</option>
                       {f.options?.map((o) => (<option key={o.value} value={o.value}>{o.label}</option>))}
                     </select>
                   ) : (

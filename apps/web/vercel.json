@@ -1,5 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "installCommand": "corepack enable && corepack prepare pnpm@9.15.0 --activate && cd ../.. && pnpm install --frozen-lockfile=false",
+  "buildCommand": "cd ../.. && pnpm --filter @k3/web build",
   "crons": [
     {
       "path": "/api/queue/scheduled/daily",

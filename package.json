@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "K3 ERP — Maintenance Department Management System for K. Three Co. for Gen. Trad. & Cont.",
-  "packageManager": "pnpm@9.0.0",
+  "packageManager": "pnpm@9.15.0",
   "scripts": {
     "dev": "pnpm --filter @k3/web dev",
     "build": "pnpm --filter @k3/web build",
@@ -24,6 +24,6 @@
     "typescript": "^5.4.0"
   },
   "engines": {
-    "node": ">=20.0.0"
-  }
+  "node": ">=20.11.0",
+  "pnpm": ">=9.0.0"
 }

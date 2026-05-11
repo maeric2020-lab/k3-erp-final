@@ -3,6 +3,14 @@ import { createImportService, type ImportTemplate } from '@k3/services';
 import { ImportsRepository } from '@k3/repositories';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
+// App Router route segment config (يحل محل export const config القديم)
+// Node.js runtime مطلوب لـ formData() مع ملفات كبيرة، و SDK supabase storage
+export const runtime = 'nodejs';
+// زمن أقصى للتنفيذ (Vercel Hobby = 10s، Pro = 60s)
+export const maxDuration = 30;
+// لا نُكاشّف هذا المسار — كل استدعاء يجب أن يُعالَج طازجاً
+export const dynamic = 'force-dynamic';
+
 export async function POST(req: NextRequest) {
   const supabase = createSupabaseServerClient();
   try {
@@ -20,7 +28,7 @@ export async function POST(req: NextRequest) {
     const filename = file.name;
     const buffer = await file.arrayBuffer();
 
-    // Upload to storage in the 'imports' bucket
+    // رفع للتخزين في bucket "imports"
     const path = `${user.id}/${Date.now()}-${filename}`;
     const { error: upErr } = await supabase.storage.from('imports').upload(path, buffer, {
       contentType: file.type || 'application/octet-stream',
@@ -38,7 +46,7 @@ export async function POST(req: NextRequest) {
       template: templateRaw === 'auto' ? 'auto' : (templateRaw as ImportTemplate),
     });
 
-    // Re-read rows from DB so the client gets the persisted records
+    // إعادة قراءة الصفوف من DB للعميل (السجلات المحفوظة)
     const rowsRepo = new ImportsRepository(supabase);
     const rows = await rowsRepo.listRows(result.run.id);
 
@@ -58,5 +66,3 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: (e as Error).message }, { status: 400 });
   }
 }
-
-export const config = { api: { bodyParser: false } };

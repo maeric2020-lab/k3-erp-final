@@ -1,0 +1,20 @@
+{
+  "name": "@k3/services",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@k3/repositories": "workspace:*",
+    "@k3/shared-types": "workspace:*",
+    "@k3/validators": "workspace:*",
+    "@supabase/supabase-js": "^2.43.0",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.2/xlsx-0.20.2.tgz"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0"
+  }
+}

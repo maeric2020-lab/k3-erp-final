@@ -1,0 +1,74 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 224 71% 4%;
+    --card: 0 0% 100%;
+    --card-foreground: 224 71% 4%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 224 71% 4%;
+
+    /* Primary = K3 teal */
+    --primary: 173 71% 41%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 220 14% 96%;
+    --secondary-foreground: 220 9% 20%;
+
+    --muted: 220 14% 96%;
+    --muted-foreground: 220 9% 46%;
+
+    --accent: 173 60% 92%;
+    --accent-foreground: 173 71% 25%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 173 71% 41%;
+
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: 224 71% 4%;
+    --foreground: 220 14% 96%;
+    --card: 224 71% 6%;
+    --card-foreground: 220 14% 96%;
+    --popover: 224 71% 6%;
+    --popover-foreground: 220 14% 96%;
+    --primary: 173 65% 50%;
+    --primary-foreground: 224 71% 6%;
+    --secondary: 220 15% 14%;
+    --secondary-foreground: 220 14% 96%;
+    --muted: 220 15% 14%;
+    --muted-foreground: 220 9% 64%;
+    --accent: 173 30% 18%;
+    --accent-foreground: 173 71% 75%;
+    --destructive: 0 62% 50%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 15% 18%;
+    --input: 220 15% 18%;
+    --ring: 173 65% 50%;
+  }
+
+  * {
+    @apply border-border;
+  }
+  html, body {
+    @apply bg-background text-foreground antialiased;
+  }
+
+  /* RTL refinements: mirror the few things Tailwind logical properties don't catch */
+  [dir='rtl'] .rtl-flip { transform: scaleX(-1); }
+}
+
+@layer components {
+  .focus-ring {
+    @apply outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2;
+  }
+}

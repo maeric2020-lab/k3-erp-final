@@ -4,10 +4,6 @@
     {
       "path": "/api/queue/scheduled/daily",
       "schedule": "0 6 * * *"
-    },
-    {
-      "path": "/api/queue/process",
-      "schedule": "0 * * * *"
     }
   ]
 }

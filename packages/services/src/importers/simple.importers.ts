@@ -1,5 +1,4 @@
-import type { SupabaseClient } from '@supabase/supabase-js';
-import type { Database, Json } from '@k3/shared-types';
+import type { K3SupabaseClient, Database, Json } from '@k3/shared-types';
 import {
   CustomersRepository,
   MachineCategoriesRepository,
@@ -97,7 +96,7 @@ export class CustomersImporter implements Importer {
         phone_secondary: h.phone2 ? asString(cells[h.phone2]) : null,
         notes: h.notes ? asString(cells[h.notes]) : null,
       };
-      const apply = async (db: SupabaseClient<Database>) => {
+      const apply = async (db: K3SupabaseClient) => {
         const repo = new CustomersRepository(db);
         const created = await repo.create(resolved as any);
         return { id: created.id };
@@ -221,7 +220,7 @@ export class MachinesImporter implements Importer {
         continue;
       }
 
-      const apply = async (db: SupabaseClient<Database>) => {
+      const apply = async (db: K3SupabaseClient) => {
         const repo = new MachinesMasterRepository(db);
         const existing = await repo.findByBusinessKey({
           category_id: cat!.id, brand_id: brandId, refrigerant_id: refrId,
@@ -350,7 +349,7 @@ export class PartsImporter implements Importer {
         });
         continue;
       }
-      const apply = async (db: SupabaseClient<Database>) => {
+      const apply = async (db: K3SupabaseClient) => {
         const repo = new SparePartsMasterRepository(db);
         const created = await repo.create(resolved as any);
         return { id: created.id };
@@ -414,7 +413,7 @@ export class GasImporter implements Importer {
       }
       const cost = h.cost ? asNumber(cells[h.cost]) ?? 0 : 0;
       const selling = h.selling ? asNumber(cells[h.selling]) ?? 0 : 0;
-      const apply = async (db: SupabaseClient<Database>) => {
+      const apply = async (db: K3SupabaseClient) => {
         const repo = new GasTypesMasterRepository(db);
         const existing = await repo.getByRefrigerantId(r.id);
         if (existing) {

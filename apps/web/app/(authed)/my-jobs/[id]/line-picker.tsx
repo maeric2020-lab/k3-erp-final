@@ -1,212 +1,245 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useTranslations, useLocale } from 'next-intl';
-import { X, Search, Wrench, Package, Droplet } from 'lucide-react';
-import { Input } from '@/components/ui/input';
+import { useState } from 'react';
+import { useTranslations } from 'next-intl';
+import { useRouter } from 'next/navigation';
+import { Plus, Pencil } from 'lucide-react';
+import { DataTable, type Column } from '@/components/ui/data-table';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { Alert } from '@/components/ui/alert';
+import { Card } from '@/components/ui/card';
+import type { SparePartMaster, SparePartCategory, MachineCategory, MachineBrand } from '@k3/repositories';
 
 interface Props {
-  jobId: string;
-  customerMachineId: string | null;
-  requestType: string;
-  onAdd: (line: any) => Promise<void>;
-  onClose: () => void;
+  title: string;
+  rows: any[];
+  total: number;
+  partCategories: SparePartCategory[];
+  machineCategories: MachineCategory[];
+  brands: MachineBrand[];
+  canAdd: boolean;
+  canEdit: boolean;
+  locale: 'ar' | 'en';
 }
 
-type Tab = 'service' | 'part' | 'gas';
-
-interface Option {
-  id: string;
-  name_ar?: string;
-  name_en?: string;
-  refrigerant_name?: string;
-  unit: string;
-  unit_price: number;
-  is_covered?: boolean;
-}
-
-export function LinePicker({ jobId, customerMachineId, requestType, onAdd, onClose }: Props) {
+export function SparePartsClient(props: Props) {
   const t = useTranslations();
-  const locale = useLocale();
-  const [tab, setTab] = useState<Tab>('service');
-  const [search, setSearch] = useState('');
-  const [options, setOptions] = useState<Option[]>([]);
-  const [loading, setLoading] = useState(false);
+  const router = useRouter();
+  const lbl = (c: { name_ar: string; name_en: string }) => props.locale === 'ar' ? c.name_ar : c.name_en;
+  const [editing, setEditing] = useState<any>(null);
+  const [creating, setCreating] = useState(false);
+  const [form, setForm] = useState<any>(emptyForm(props));
   const [error, setError] = useState<string | null>(null);
-  const [adding, setAdding] = useState<string | null>(null);
-  const [quantities, setQuantities] = useState<Record<string, number>>({});
+  const [submitting, setSubmitting] = useState(false);
 
-  // Debounced fetch
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
-
-    const fetchOptions = async () => {
-      try {
-        let url = '';
-        if (tab === 'service') {
-          const params = new URLSearchParams();
-          if (customerMachineId) params.set('customer_machine_id', customerMachineId);
-          params.set('request_type', requestType);
-          if (search) params.set('q', search);
-          url = `/api/operations/line-picker/services?${params}`;
-        } else if (tab === 'part') {
-          const params = new URLSearchParams();
-          if (customerMachineId) params.set('customer_machine_id', customerMachineId);
-          if (search) params.set('q', search);
-          url = `/api/operations/line-picker/parts?${params}`;
-        } else {
-          url = '/api/operations/line-picker/gas';
-        }
-
-        const res = await fetch(url);
-        if (!res.ok) {
-          const body = await res.json().catch(() => ({}));
-          throw new Error(body.error ?? `${res.status}`);
-        }
-        const body = await res.json();
-        if (!cancelled) {
-          if (tab === 'service') {
-            setOptions(body.options.map((o: any) => ({
-              id: o.service_id, name_ar: o.name_ar, name_en: o.name_en,
-              unit: o.unit, unit_price: o.unit_price, is_covered: o.is_covered,
-            })));
-          } else if (tab === 'part') {
-            setOptions(body.options.map((o: any) => ({
-              id: o.part_id, name_ar: o.name_ar, name_en: o.name_en,
-              unit: o.unit, unit_price: o.unit_price, is_covered: o.is_covered,
-            })));
-          } else {
-            setOptions(body.options.map((o: any) => ({
-              id: o.gas_id, refrigerant_name: o.refrigerant_name,
-              unit: 'kg', unit_price: o.unit_price,
-            })));
-          }
-        }
-      } catch (e) {
-        if (!cancelled) setError((e as Error).message);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
+  function emptyForm(p: Props): any {
+    return {
+      category_id: p.partCategories[0]?.id ?? '',
+      part_type: '',
+      name_ar: '', name_en: '',
+      brand_id: '', model: '', country_origin: '',
+      compatible_categories: [],
+      unit: 'piece',
+      cost_price: 0, selling_price: 0,
+      notes: '', is_active: true,
     };
+  }
 
-    const handle = setTimeout(fetchOptions, search ? 250 : 0);
-    return () => { cancelled = true; clearTimeout(handle); };
-  }, [tab, search, customerMachineId, requestType]);
-
-  const addLine = async (option: Option) => {
-    setAdding(option.id);
-    try {
-      const qty = quantities[option.id] ?? 1;
-      const payload: any = {
-        line_type: tab,
-        quantity: qty,
-      };
-      if (tab === 'service') payload.service_id = option.id;
-      if (tab === 'part') payload.part_id = option.id;
-      if (tab === 'gas') payload.gas_id = option.id;
-      await onAdd(payload);
-    } finally {
-      setAdding(null);
+  const open = (row?: any) => {
+    if (row) {
+      setEditing(row);
+      setCreating(false);
+      setForm({
+        category_id: row.category_id,
+        part_type: row.part_type ?? '',
+        name_ar: row.name_ar ?? '',
+        name_en: row.name_en ?? '',
+        brand_id: row.brand_id ?? '',
+        model: row.model ?? '',
+        country_origin: row.country_origin ?? '',
+        compatible_categories: row.compatible_categories ?? [],
+        unit: row.unit ?? 'piece',
+        cost_price: row.cost_price ?? 0,
+        selling_price: row.selling_price ?? 0,
+        notes: row.notes ?? '',
+        is_active: row.is_active,
+      });
+    } else {
+      setCreating(true); setEditing(null); setForm(emptyForm(props));
     }
+    setError(null);
+  };
+  const close = () => { setCreating(false); setEditing(null); setError(null); };
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null); setSubmitting(true);
+    try {
+      const url = editing ? `/api/masters/spare-parts/${editing.id}` : '/api/masters/spare-parts';
+      const method = editing ? 'PATCH' : 'POST';
+      const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? `${res.status}`);
+      }
+      close();
+      router.refresh();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally { setSubmitting(false); }
+  };
+
+  const columns: Column<any>[] = [
+    { key: 'part_code', header: t('masters.partCode'), className: 'w-32 font-mono text-xs' },
+    { key: 'name_ar', header: t('common.name_ar'), cell: (r) => <span className="font-medium">{r.name_ar}</span> },
+    { key: 'name_en', header: t('common.name_en'), hideOnMobile: true },
+    { key: 'category', header: t('masters.sparePartCategories'), hideOnMobile: true,
+      cell: (r) => r.category ? lbl(r.category) : '—' },
+    { key: 'brand', header: t('masters.machineBrands'), hideOnMobile: true,
+      cell: (r) => r.brand?.name ?? '—' },
+    { key: 'selling_price', header: t('masters.sellingPrice'), align: 'end',
+      cell: (r) => Number(r.selling_price ?? 0).toFixed(3) },
+    { key: 'is_active', header: t('common.status'), align: 'center',
+      cell: (r) => r.is_active ? (
+        <span className="inline-block px-2 py-0.5 rounded-full bg-green-50 text-green-700 text-xs">{t('common.active')}</span>
+      ) : (<span className="inline-block px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 text-xs">{t('common.inactive')}</span>),
+    },
+  ];
+  if (props.canEdit) {
+    columns.push({
+      key: '__actions', header: '', align: 'end',
+      cell: (r) => (
+        <button onClick={() => open(r)} className="inline-flex items-center gap-1 text-brand-600 hover:text-brand-700 text-sm">
+          <Pencil className="w-3.5 h-3.5" />{t('common.edit')}
+        </button>
+      ),
+    });
+  }
+
+  const toggleCat = (id: string) => {
+    setForm((s: any) => ({
+      ...s,
+      compatible_categories: s.compatible_categories.includes(id)
+        ? s.compatible_categories.filter((c: string) => c !== id)
+        : [...s.compatible_categories, id],
+    }));
   };
 
   return (
-    <div className="fixed inset-0 z-30 flex items-end sm:items-center justify-center bg-black/40 p-0 sm:p-4">
-      <div className="bg-white w-full max-w-lg rounded-t-2xl sm:rounded-2xl flex flex-col max-h-[90vh] sm:max-h-[80vh]">
-        <div className="flex items-center justify-between p-4 border-b border-gray-200">
-          <h3 className="font-semibold">{t('operations.jobs.addLine')}</h3>
-          <button onClick={onClose} className="p-1 -m-1 rounded-md hover:bg-gray-100">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        {/* Tabs */}
-        <div className="flex border-b border-gray-200">
-          {([
-            { k: 'service', icon: Wrench, label: 'addService' },
-            { k: 'part',    icon: Package, label: 'addPart' },
-            { k: 'gas',     icon: Droplet, label: 'addGas' },
-          ] as const).map((it) => (
-            <button
-              key={it.k}
-              onClick={() => setTab(it.k)}
-              className={`flex-1 py-3 flex items-center justify-center gap-2 text-sm font-medium border-b-2 transition-colors ${
-                tab === it.k ? 'border-brand-600 text-brand-600' : 'border-transparent text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              <it.icon className="w-4 h-4" />
-              {t(`operations.jobs.${it.label}` as any)}
-            </button>
-          ))}
-        </div>
-
-        {/* Search */}
-        {(tab === 'service' || tab === 'part') && (
-          <div className="p-3 border-b border-gray-200">
-            <div className="relative">
-              <Search className="absolute top-1/2 -translate-y-1/2 start-3 w-4 h-4 text-gray-400 pointer-events-none" />
-              <Input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder={t('common.search')}
-                className="ps-9"
-              />
+    <div className="space-y-6">
+      <h1 className="text-2xl font-bold text-gray-900">{props.title}</h1>
+      {(creating || editing) && (
+        <Card className="p-6">
+          <h2 className="text-lg font-semibold mb-4">{editing ? t('common.edit') : t('common.new')}</h2>
+          <form onSubmit={submit} className="space-y-4">
+            {error && <Alert variant="destructive">{error}</Alert>}
+            <div className="grid sm:grid-cols-2 gap-4">
+              <div>
+                <Label required>{t('masters.sparePartCategories')}</Label>
+                <select
+                  value={form.category_id}
+                  onChange={(e) => setForm((s: any) => ({ ...s, category_id: e.target.value }))}
+                  className="w-full h-10 px-3 rounded-md border border-gray-300 bg-white"
+                >
+                  <option value="">—</option>
+                  {props.partCategories.map((c) => <option key={c.id} value={c.id}>{lbl(c)}</option>)}
+                </select>
+              </div>
+              <div>
+                <Label>{t('masters.machineBrands')}</Label>
+                <select
+                  value={form.brand_id ?? ''}
+                  onChange={(e) => setForm((s: any) => ({ ...s, brand_id: e.target.value || null }))}
+                  className="w-full h-10 px-3 rounded-md border border-gray-300 bg-white"
+                >
+                  <option value="">—</option>
+                  {props.brands.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <Label required>{t('common.name_ar')}</Label>
+                <Input value={form.name_ar} onChange={(e) => setForm((s: any) => ({ ...s, name_ar: e.target.value }))} dir="rtl" />
+              </div>
+              <div>
+                <Label required>{t('common.name_en')}</Label>
+                <Input value={form.name_en} onChange={(e) => setForm((s: any) => ({ ...s, name_en: e.target.value }))} dir="ltr" />
+              </div>
+              <div>
+                <Label>Model</Label>
+                <Input value={form.model ?? ''} onChange={(e) => setForm((s: any) => ({ ...s, model: e.target.value }))} dir="ltr" />
+              </div>
+              <div>
+                <Label>{t('masters.countryOrigin')}</Label>
+                <Input value={form.country_origin ?? ''} onChange={(e) => setForm((s: any) => ({ ...s, country_origin: e.target.value }))} dir="ltr" />
+              </div>
+              <div>
+                <Label>{t('masters.unit')}</Label>
+                <select
+                  value={form.unit}
+                  onChange={(e) => setForm((s: any) => ({ ...s, unit: e.target.value }))}
+                  className="w-full h-10 px-3 rounded-md border border-gray-300 bg-white"
+                >
+                  <option value="piece">{t('masters.units.piece')}</option>
+                  <option value="meter">{t('masters.units.meter')}</option>
+                  <option value="kg">{t('masters.units.kg')}</option>
+                  <option value="set">{t('masters.units.set')}</option>
+                  <option value="liter">{t('masters.units.liter')}</option>
+                </select>
+              </div>
+              <div className="flex items-end gap-2 pb-2">
+                <Switch checked={form.is_active} onCheckedChange={(v) => setForm((s: any) => ({ ...s, is_active: v }))} />
+                <Label className="!mb-0">{t('common.active')}</Label>
+              </div>
+              <div>
+                <Label>{t('masters.costPrice')}</Label>
+                <Input type="number" step="0.001" value={form.cost_price}
+                  onChange={(e) => setForm((s: any) => ({ ...s, cost_price: Number(e.target.value) }))} />
+              </div>
+              <div>
+                <Label>{t('masters.sellingPrice')}</Label>
+                <Input type="number" step="0.001" value={form.selling_price}
+                  onChange={(e) => setForm((s: any) => ({ ...s, selling_price: Number(e.target.value) }))} />
+              </div>
             </div>
-          </div>
-        )}
-
-        {/* Options list */}
-        <div className="flex-1 overflow-y-auto">
-          {error && <div className="p-3"><Alert variant="destructive">{error}</Alert></div>}
-          {loading && <div className="p-6 text-center text-gray-500">{t('common.loading')}</div>}
-          {!loading && !error && options.length === 0 && (
-            <div className="p-6 text-center text-gray-500">{t('common.noResults')}</div>
-          )}
-          {!loading && options.length > 0 && (
-            <div className="divide-y divide-gray-100">
-              {options.map((o) => {
-                const display = o.refrigerant_name
-                  ? o.refrigerant_name
-                  : (locale === 'ar' ? (o.name_ar || o.name_en) : (o.name_en || o.name_ar)) ?? '—';
-                const qty = quantities[o.id] ?? 1;
-                return (
-                  <div key={o.id} className="p-3 flex items-center gap-2">
-                    <div className="flex-1 min-w-0">
-                      <div className="font-medium text-sm truncate" dir="auto">{display}</div>
-                      <div className="text-xs text-gray-500">
-                        {o.unit_price.toFixed(3)} KWD / {o.unit}
-                        {o.is_covered && (
-                          <span className="ms-2 inline-block px-1.5 py-0.5 rounded bg-green-100 text-green-700 text-[10px]">
-                            {t('operations.jobs.covered')}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <Input
-                      type="number"
-                      step="any"
-                      value={qty}
-                      onChange={(e) => setQuantities((s) => ({ ...s, [o.id]: Math.max(0.1, Number(e.target.value) || 1) }))}
-                      className="w-20 text-center"
-                    />
-                    <Button size="sm" onClick={() => addLine(o)} disabled={adding === o.id}>
-                      {adding === o.id ? '…' : t('common.add')}
-                    </Button>
-                  </div>
-                );
-              })}
+            <div>
+              <Label>{t('masters.compatibleCategories')}</Label>
+              <div className="flex flex-wrap gap-2 mt-1 p-3 rounded-md border border-gray-200 bg-gray-50">
+                {props.machineCategories.map((c) => (
+                  <button
+                    type="button"
+                    key={c.id}
+                    onClick={() => toggleCat(c.id)}
+                    className={`px-3 py-1 text-xs rounded-full border ${
+                      form.compatible_categories.includes(c.id)
+                        ? 'bg-brand-600 text-white border-brand-600'
+                        : 'bg-white text-gray-700 border-gray-300 hover:border-gray-400'
+                    }`}
+                  >
+                    {lbl(c)}
+                  </button>
+                ))}
+              </div>
             </div>
-          )}
-        </div>
-
-        <div className="p-3 border-t border-gray-200">
-          <Button variant="outline" className="w-full" onClick={onClose}>{t('common.close')}</Button>
-        </div>
-      </div>
+            <div className="flex items-center gap-2 pt-2">
+              <Button type="submit" disabled={submitting}>{submitting ? t('common.loading') : t('common.save')}</Button>
+              <Button type="button" variant="outline" onClick={close}>{t('common.cancel')}</Button>
+            </div>
+          </form>
+        </Card>
+      )}
+      <DataTable
+        rows={props.rows}
+        columns={columns}
+        total={props.total}
+        page={1}
+        pageSize={50}
+        rightAction={props.canAdd && !creating && !editing ? (
+          <Button onClick={() => open()}><Plus className="w-4 h-4 me-1" />{t('common.add')}</Button>
+        ) : undefined}
+      />
     </div>
   );
 }

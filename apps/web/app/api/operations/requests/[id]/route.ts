@@ -1,40 +1,29 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { maintenanceRequestSchema } from '@k3/validators';
-import { MaintenanceRequestsRepository } from '@k3/repositories';
+import { LinePickerService } from '@k3/services';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
-interface Ctx { params: { id: string } }
-
-export async function GET(_req: NextRequest, { params }: Ctx) {
+/**
+ * GET /api/operations/line-picker/services?customer_machine_id=...&request_type=...&q=...
+ *
+ * Returns priced service options for the technician's "Add service" tab.
+ * Each item includes is_covered so the UI can label them clearly.
+ */
+export async function GET(req: NextRequest) {
   const supabase = createSupabaseServerClient();
-  const repo = new MaintenanceRequestsRepository(supabase);
-  const row = await repo.getById(params.id);
-  if (!row) return NextResponse.json({ error: 'not found' }, { status: 404 });
-  return NextResponse.json(row);
-}
-
-export async function PATCH(req: NextRequest, { params }: Ctx) {
-  const supabase = createSupabaseServerClient();
-  const body = await req.json().catch(() => null);
-  const parsed = maintenanceRequestSchema.partial().safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.errors[0]?.message ?? 'invalid input' }, { status: 400 });
+  const { searchParams } = new URL(req.url);
+  const requestType = searchParams.get('request_type');
+  if (!requestType || !['CASH', 'CO', 'CW', 'CWC', 'UG'].includes(requestType)) {
+    return NextResponse.json({ error: 'request_type required (CASH|CO|CW|CWC|UG)' }, { status: 400 });
   }
   try {
-    const repo = new MaintenanceRequestsRepository(supabase);
-    const updated = await repo.update(params.id, parsed.data as any);
-    return NextResponse.json({ id: updated.id });
-  } catch (e) {
-    return NextResponse.json({ error: (e as Error).message }, { status: 400 });
-  }
-}
-
-export async function DELETE(_req: NextRequest, { params }: Ctx) {
-  const supabase = createSupabaseServerClient();
-  try {
-    const repo = new MaintenanceRequestsRepository(supabase);
-    await repo.softDelete(params.id);
-    return NextResponse.json({ ok: true });
+    const svc = new LinePickerService(supabase);
+    const options = await svc.listServicesForJob({
+      customer_machine_id: searchParams.get('customer_machine_id'),
+      request_type: requestType as any,
+      search: searchParams.get('q') ?? undefined,
+      limit: Number(searchParams.get('limit') ?? 100),
+    });
+    return NextResponse.json({ options });
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 400 });
   }

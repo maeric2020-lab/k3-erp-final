@@ -1,74 +1,61 @@
-import { NextResponse, type NextRequest } from 'next/server';
-import { documentLineSchema } from '@k3/validators';
-import {
-  QuotationsRepository,
-  DocumentLinesRepository,
-  PricingRepository,
-} from '@k3/repositories';
-import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { createSupabaseAdminClient } from '@/lib/supabase/admin';
+import { withErrorHandler, ApiErrors } from '@/lib/api/error-handler';
+import { logger } from '@/lib/logger';
+import { env } from '@/lib/env';
 
-interface Ctx { params: { id: string } }
+/**
+ * يُستدعى يومياً الساعة 6 صباحاً (UTC = 9 صباحاً بتوقيت الكويت).
+ * يُجدول المهام الدورية في الـ queue:
+ *   - فحص الفواتير المتأخرة (إشعارات للمحاسبة)
+ *   - فحص العقود التي قاربت على الانتهاء
+ */
 
-export async function GET(_req: NextRequest, { params }: Ctx) {
-  const supabase = createSupabaseServerClient();
-  const { data, error } = await supabase
-    .from('document_lines')
-    .select('*')
-    .eq('quotation_id', params.id)
-    .order('display_order', { ascending: true });
-  if (error) return NextResponse.json({ error: error.message }, { status: 400 });
-  return NextResponse.json({ lines: data ?? [] });
-}
-
-export async function POST(req: NextRequest, { params }: Ctx) {
-  const supabase = createSupabaseServerClient();
-  const body = await req.json().catch(() => null);
-  const parsed = documentLineSchema.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.errors[0]?.message ?? 'invalid input' }, { status: 400 });
+export const POST = withErrorHandler(async (req: Request) => {
+  const cronSecret = env.CRON_SECRET;
+  const auth = req.headers.get('authorization');
+  if (cronSecret && auth !== `Bearer ${cronSecret}`) {
+    throw ApiErrors.unauthorized('CRON_SECRET غير صحيح');
   }
-  try {
-    const quotations = new QuotationsRepository(supabase);
-    const lines = new DocumentLinesRepository(supabase);
-    const pricing = new PricingRepository(supabase);
 
-    const quotation = await quotations.getById(params.id);
-    if (!quotation) return NextResponse.json({ error: 'quotation not found' }, { status: 404 });
+  const supabase = createSupabaseAdminClient();
+  const enqueued: Array<{ task: string; id: string }> = [];
 
-    const priced = await pricing.compute({
-      line_type: parsed.data.line_type,
-      service_id: parsed.data.service_id ?? null,
-      part_id: parsed.data.part_id ?? null,
-      gas_id: parsed.data.gas_id ?? null,
-      customer_machine_id: parsed.data.customer_machine_id ?? null,
-      machine_master_id: parsed.data.machine_master_id ?? null,
-      request_type: parsed.data.request_type ?? quotation.request_type,
-      quantity: parsed.data.quantity,
-    });
+  // 1) فحص الفواتير المتأخرة (لكل company)
+  const { data: companies } = await supabase
+    .from('companies')
+    .select('id')
+    .eq('is_active', true);
 
-    const created = await lines.create({
-      quotation_id: params.id,
-      line_type: parsed.data.line_type,
-      service_id: parsed.data.service_id ?? null,
-      part_id: parsed.data.part_id ?? null,
-      gas_id: parsed.data.gas_id ?? null,
-      customer_machine_id: parsed.data.customer_machine_id ?? null,
-      machine_master_id: parsed.data.machine_master_id ?? null,
-      description_ar: parsed.data.description_ar ?? priced.description_ar,
-      description_en: parsed.data.description_en ?? priced.description_en,
-      unit: priced.unit,
-      quantity: parsed.data.quantity,
-      request_type: (parsed.data.request_type ?? quotation.request_type) as any,
-      unit_price: priced.unit_price,
-      cost_price: priced.cost_price,
-      is_covered: priced.is_covered,
-      pricing_source: priced.pricing_source,
-      pricing_computed_at: new Date().toISOString(),
-      notes: parsed.data.notes ?? null,
-      display_order: parsed.data.display_order,
-    } as any);
-    return NextResponse.json({ id: created.id, line_total: created.line_total }, { status: 201 });
-  } catch (e) {
-    return NextResponse.json({ error: (e as Error).message }, { status: 400 });
+  for (const company of companies ?? []) {
+    // نُعيّن company_id يدوياً لأن service_role لا يمر عبر fn_current_company_id
+    const { data: id1 } = await supabase
+      .from('job_queue')
+      .insert({
+        company_id: (company as any).id,
+        task_type: 'check_overdue_invoices',
+        payload: {},
+        priority: 50,
+      } as any)
+      .select('id')
+      .single();
+    if (id1) enqueued.push({ task: 'check_overdue_invoices', id: (id1 as any).id });
+
+    // 2) فحص العقود
+    const { data: id2 } = await supabase
+      .from('job_queue')
+      .insert({
+        company_id: (company as any).id,
+        task_type: 'check_expiring_contracts',
+        payload: { days_before: 30 },
+        priority: 50,
+      } as any)
+      .select('id')
+      .single();
+    if (id2) enqueued.push({ task: 'check_expiring_contracts', id: (id2 as any).id });
   }
-}
+
+  logger.info('queue.daily_scheduled', { count: enqueued.length });
+  return Response.json({ enqueued });
+});
+
+export const GET = POST;  // نفس الفعل (Vercel cron يستخدم GET أحياناً)

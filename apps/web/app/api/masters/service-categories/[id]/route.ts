@@ -1,11 +1,11 @@
-import { ServiceCategoriesRepository } from '@k3/repositories';
-import { serviceCategorySchema } from '@k3/validators';
+import { RefrigerantTypesRepository } from '@k3/repositories';
+import { refrigerantTypeSchema } from '@k3/validators';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
-import { makeIdHandlers } from '@/lib/api/master-handlers';
+import { makeListPostHandlers } from '@/lib/api/master-handlers';
 
-const handlers = makeIdHandlers({
-  buildRepo: () => new ServiceCategoriesRepository(createSupabaseServerClient()),
-  schema: serviceCategorySchema,
+const handlers = makeListPostHandlers({
+  buildRepo: () => new RefrigerantTypesRepository(createSupabaseServerClient()),
+  schema: refrigerantTypeSchema,
 });
-export const PATCH = handlers.PATCH;
-export const DELETE = handlers.DELETE;
+export const GET = handlers.GET;
+export const POST = handlers.POST;

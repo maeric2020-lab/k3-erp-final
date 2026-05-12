@@ -1,5 +1,4 @@
-import type { SupabaseClient } from '@supabase/supabase-js';
-import type { Database } from '@k3/shared-types';
+import type { K3SupabaseClient, Database } from '@k3/shared-types';
 
 type TableName = keyof Database['public']['Tables'];
 
@@ -22,7 +21,7 @@ export interface ListOptions {
  */
 export abstract class CrudRepository<T extends TableName> {
   constructor(
-    protected readonly db: SupabaseClient<Database>,
+    protected readonly db: K3SupabaseClient,
     protected readonly table: T,
     protected readonly searchableColumns: readonly string[] = []
   ) {}

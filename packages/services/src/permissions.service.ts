@@ -1,5 +1,4 @@
-import type { SupabaseClient } from '@supabase/supabase-js';
-import type { Database, ScreenAction } from '@k3/shared-types';
+import type { K3SupabaseClient, Database, ScreenAction } from '@k3/shared-types';
 import { PermissionsRepository } from '@k3/repositories';
 
 /**
@@ -15,7 +14,7 @@ export class PermissionsService {
   private readonly repo: PermissionsRepository;
   private readonly cache = new Map<string, boolean>();
 
-  constructor(db: SupabaseClient<Database>) {
+  constructor(db: K3SupabaseClient) {
     this.repo = new PermissionsRepository(db);
   }
 

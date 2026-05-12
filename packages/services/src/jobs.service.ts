@@ -1,5 +1,4 @@
-import type { SupabaseClient } from '@supabase/supabase-js';
-import type { Database, JobStatus, RequestType, LineType } from '@k3/shared-types';
+import type { K3SupabaseClient, Database, JobStatus, RequestType, LineType } from '@k3/shared-types';
 import {
   JobsRepository,
   DocumentLinesRepository,
@@ -33,7 +32,7 @@ export class JobsService {
   private readonly requests: MaintenanceRequestsRepository;
   private readonly pricing: PricingRepository;
 
-  constructor(private readonly db: SupabaseClient<Database>) {
+  constructor(private readonly db: K3SupabaseClient) {
     this.jobs = new JobsRepository(db);
     this.lines = new DocumentLinesRepository(db);
     this.requests = new MaintenanceRequestsRepository(db);
@@ -199,9 +198,10 @@ export class JobsService {
 
     let unit_price = priced.unit_price;
     let pricing_source = priced.pricing_source;
-    if (args.line_type === 'custom') {
-      if (args.custom_unit_price == null || args.custom_unit_price < 0) {
-        throw new Error('Custom lines require an explicit non-negative unit_price');
+    // تجاوز السعر يدوياً عند تمرير custom_unit_price (لأي نوع سطر)
+    if (args.custom_unit_price != null) {
+      if (args.custom_unit_price < 0) {
+        throw new Error('custom_unit_price must be non-negative');
       }
       unit_price = args.custom_unit_price;
       pricing_source = 'custom:override';

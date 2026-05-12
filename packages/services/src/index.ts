@@ -71,10 +71,9 @@ import {
   PartsImporter,
   GasImporter,
 } from './importers';
-import type { SupabaseClient } from '@supabase/supabase-js';
-import type { Database } from '@k3/shared-types';
+import type { K3SupabaseClient, Database } from '@k3/shared-types';
 
-export function createImportService(db: SupabaseClient<Database>): ImportService {
+export function createImportService(db: K3SupabaseClient): ImportService {
   const svc = new ImportService(db);
   svc.registerMany([
     new ServicePricingImporter(),

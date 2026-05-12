@@ -1,12 +1,11 @@
-import type { SupabaseClient } from '@supabase/supabase-js';
-import type { Database, Tables } from '@k3/shared-types';
+import type { K3SupabaseClient, Database, Tables } from '@k3/shared-types';
 import { CrudRepository } from './_base';
 
 export type ServicePricing = Tables<'service_pricing'>;
 export type ContractPricing = Tables<'contract_pricing'>;
 
 export class ServicePricingRepository extends CrudRepository<'service_pricing'> {
-  constructor(db: SupabaseClient<Database>) {
+  constructor(db: K3SupabaseClient) {
     super(db, 'service_pricing', []);
   }
 
@@ -60,7 +59,7 @@ export class ServicePricingRepository extends CrudRepository<'service_pricing'> 
 }
 
 export class ContractPricingRepository extends CrudRepository<'contract_pricing'> {
-  constructor(db: SupabaseClient<Database>) {
+  constructor(db: K3SupabaseClient) {
     super(db, 'contract_pricing', ['outdoor_model', 'indoor_model']);
   }
 

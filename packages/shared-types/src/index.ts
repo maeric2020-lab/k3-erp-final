@@ -1,4 +1,5 @@
 export type { Database, Json, Tables, TablesInsert, TablesUpdate } from './database.types';
+export type { K3SupabaseClient } from './supabase-client';
 
 // -----------------------------------------------------------------------------
 // Domain-level enums (mirror DB CHECK constraints; one source of truth here)

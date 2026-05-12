@@ -1,11 +1,11 @@
-import { MachinesMasterRepository } from '@k3/repositories';
-import { machineMasterSchema } from '@k3/validators';
+import { MachineCategoriesRepository } from '@k3/repositories';
+import { machineCategorySchema } from '@k3/validators';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
-import { makeIdHandlers } from '@/lib/api/master-handlers';
+import { makeListPostHandlers } from '@/lib/api/master-handlers';
 
-const handlers = makeIdHandlers({
-  buildRepo: () => new MachinesMasterRepository(createSupabaseServerClient()),
-  schema: machineMasterSchema,
+const handlers = makeListPostHandlers({
+  buildRepo: () => new MachineCategoriesRepository(createSupabaseServerClient()),
+  schema: machineCategorySchema,
 });
-export const PATCH = handlers.PATCH;
-export const DELETE = handlers.DELETE;
+export const GET = handlers.GET;
+export const POST = handlers.POST;

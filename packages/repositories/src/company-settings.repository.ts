@@ -1,10 +1,9 @@
-import type { SupabaseClient } from '@supabase/supabase-js';
-import type { Database, Tables, TablesUpdate } from '@k3/shared-types';
+import type { K3SupabaseClient, Database, Tables, TablesUpdate } from '@k3/shared-types';
 
 export type CompanySettings = Tables<'company_settings'>;
 
 export class CompanySettingsRepository {
-  constructor(private readonly db: SupabaseClient<Database>) {}
+  constructor(private readonly db: K3SupabaseClient) {}
 
   async get(): Promise<CompanySettings | null> {
     const { data, error } = await this.db

@@ -1,298 +1,179 @@
-'use client';
+import { getLocale, getTranslations } from 'next-intl/server';
+import { requireScreen } from '@/lib/auth/require-screen';
+import { Topbar } from '@/components/nav/topbar';
+import { Briefcase, AlertCircle, Receipt, TrendingUp } from 'lucide-react';
+import { DashboardRepository, PermissionsRepository } from '@k3/repositories';
+import { StatWidget } from '@/components/dashboard/stat-widget';
+import { Sparkline } from '@/components/dashboard/sparkline';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { useTranslations, useLocale } from 'next-intl';
-import { Plus, Trash2, X, Briefcase } from 'lucide-react';
-import Link from 'next/link';
-import { Card } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Alert } from '@/components/ui/alert';
-import type { Invoice, Customer, DocumentLine, Payment, Job } from '@k3/repositories';
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
-interface Props {
-  invoice: Invoice;
-  customer: Customer | null;
-  initialLines: DocumentLine[];
-  initialPayments: Payment[];
-  job: Job | null;
-  canEditInvoice: boolean;
-  canAddPayment: boolean;
-}
+export default async function DashboardPage() {
+  const ctx = await requireScreen('dashboard', 'view', '/dashboard');
+  const t = await getTranslations();
+  const locale = await getLocale();
+  const dash = new DashboardRepository(ctx.supabase);
+  const perms = new PermissionsRepository(ctx.supabase);
 
-const STATUS_CLS: Record<string, string> = {
-  issued: 'bg-blue-50 text-blue-700',
-  partial: 'bg-amber-50 text-amber-700',
-  paid: 'bg-green-50 text-green-700',
-  cancelled: 'bg-gray-100 text-gray-500',
-  void: 'bg-gray-100 text-gray-500',
-};
+  const userName =
+    locale === 'en'
+      ? ctx.profile.full_name_en ?? ctx.profile.full_name_ar ?? ctx.profile.email
+      : ctx.profile.full_name_ar ?? ctx.profile.full_name_en ?? ctx.profile.email;
 
-const PAYMENT_METHODS = ['cash', 'knet', 'transfer', 'cheque', 'card', 'other'] as const;
+  const [canViewJobs, canViewMyJobs, canViewRequests, canViewInvoices] = await Promise.all([
+    perms.hasScreenPermission('jobs', 'view'),
+    perms.hasScreenPermission('jobs_my', 'view'),
+    perms.hasScreenPermission('maintenance_requests', 'view'),
+    perms.hasScreenPermission('invoices', 'view'),
+  ]);
+  const showJobs = canViewJobs || canViewMyJobs || ctx.profile.is_super_admin;
+  const showRequests = canViewRequests || ctx.profile.is_super_admin;
+  const showInvoices = canViewInvoices || ctx.profile.is_super_admin;
 
-export function InvoiceDetailClient({
-  invoice: initialInvoice,
-  customer,
-  initialLines,
-  initialPayments,
-  job,
-  canEditInvoice,
-  canAddPayment,
-}: Props) {
-  const t = useTranslations();
-  const locale = useLocale();
-  const router = useRouter();
-  const [invoice, setInvoice] = useState(initialInvoice);
-  const [lines] = useState(initialLines);
-  const [payments, setPayments] = useState(initialPayments);
-  const [showPay, setShowPay] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [pay, setPay] = useState({
-    amount: Number(invoice.balance) || 0,
-    method: 'cash' as typeof PAYMENT_METHODS[number],
-    reference: '',
-    payment_date: new Date().toISOString().slice(0, 10),
-    notes: '',
-  });
+  const [todayJobs, openRequests, overdueInvoices, revenueMtd] = await Promise.all([
+    showJobs ? dash.todayJobs() : Promise.resolve(null),
+    showRequests ? dash.openRequests() : Promise.resolve(null),
+    showInvoices ? dash.overdueInvoices() : Promise.resolve(null),
+    showInvoices ? dash.revenueMtd() : Promise.resolve(null),
+  ]);
 
-  const refresh = async () => {
-    const r = await fetch(`/api/invoices/${invoice.id}`).then((r) => r.json());
-    setInvoice(r.invoice);
-    setPayments(r.payments ?? []);
-    router.refresh();
-  };
+  let revenueDelta: number | null = null;
+  if (revenueMtd && revenueMtd.prev_month_total > 0) {
+    revenueDelta = Math.round(((revenueMtd.mtd_total - revenueMtd.prev_month_total) / revenueMtd.prev_month_total) * 100);
+  }
 
-  const submitPayment = async () => {
-    setError(null);
-    setBusy(true);
-    try {
-      if (!pay.amount || pay.amount <= 0) throw new Error('Amount must be > 0');
-      const res = await fetch(`/api/invoices/${invoice.id}/payments`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(pay),
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.error ?? `${res.status}`);
-      }
-      setShowPay(false);
-      setPay({ amount: 0, method: 'cash', reference: '', payment_date: new Date().toISOString().slice(0, 10), notes: '' });
-      await refresh();
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const removePayment = async (pid: string) => {
-    if (!confirm(t('common.deleteConfirm'))) return;
-    await fetch(`/api/payments/${pid}`, { method: 'DELETE' });
-    await refresh();
-  };
-
-  const voidInvoice = async () => {
-    if (!confirm(t('common.deleteConfirm'))) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const res = await fetch(`/api/invoices/${invoice.id}`, {
-        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'void' }),
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.error ?? `${res.status}`);
-      }
-      await refresh();
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  };
+  const fmt = (n: number) => n.toLocaleString(locale === 'ar' ? 'ar-KW' : 'en-US');
+  const fmtKwd = (n: number) => `${n.toFixed(3)} KWD`;
 
   return (
     <>
-      <div className="flex items-start justify-between gap-3 flex-wrap">
+      <Topbar
+        breadcrumb={[{ label: t('dashboard.title') }]}
+        userName={userName ?? undefined}
+        userId={ctx.profile.id}
+      />
+      <div className="container max-w-6xl flex-1 px-6 py-6 space-y-6">
         <div>
-          <div className="font-mono text-sm text-gray-500">{invoice.invoice_no}</div>
-          <h1 className="text-2xl font-bold text-gray-900">{customer?.name_ar ?? '—'}</h1>
+          <h1 className="text-2xl font-bold text-gray-900">
+            {t('dashboard.welcome')}, <span dir="auto">{userName}</span>
+          </h1>
+          <p className="text-sm text-gray-500 mt-1">
+            {new Date().toLocaleDateString(locale === 'ar' ? 'ar-KW' : 'en-US', {
+              weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+            })}
+          </p>
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className={`px-2.5 py-1 rounded-full text-xs ${STATUS_CLS[invoice.status] ?? ''}`}>
-            {t(`finance.invoices.statuses.${invoice.status}` as any)}
-          </span>
-          {invoice.is_zero_charge && (
-            <span className="px-2.5 py-1 rounded-full text-xs bg-green-100 text-green-700">
-              {t('finance.invoices.zeroCharge')}
-            </span>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {showJobs && todayJobs && (
+            <StatWidget
+              title={t('dashboard.todayJobs')}
+              value={fmt(todayJobs.total)}
+              subtitle={
+                todayJobs.in_field + todayJobs.working > 0
+                  ? `${fmt(todayJobs.in_field + todayJobs.working)} ${t('dashboard.todayJobsSubtitle')}`
+                  : t('dashboard.todayJobsSubtitle')
+              }
+              icon={Briefcase}
+              tone="brand"
+              href={canViewJobs ? '/operations/jobs' : '/my-jobs'}
+            >
+              <div className="flex items-center gap-3 text-xs">
+                <Stat label={t('dashboard.completedToday')} value={fmt(todayJobs.completed_today)} color="text-green-600" />
+                {todayJobs.pending_assignment > 0 && (
+                  <Stat label={t('dashboard.pendingAssignment')} value={fmt(todayJobs.pending_assignment)} color="text-amber-600" />
+                )}
+              </div>
+            </StatWidget>
           )}
-        </div>
-      </div>
 
-      {error && <Alert variant="destructive">{error}</Alert>}
-
-      {job && (
-        <Link href={`/operations/jobs/${job.id}`} className="inline-flex items-center gap-2 text-sm text-brand-600 hover:underline">
-          <Briefcase className="w-4 h-4" />
-          {t('operations.jobs.title')}: {job.job_no}
-        </Link>
-      )}
-
-      <div className="grid lg:grid-cols-3 gap-6">
-        {/* Left: lines + facts */}
-        <div className="space-y-6 lg:col-span-2">
-          <Card className="p-6">
-            <div className="grid sm:grid-cols-3 gap-4 text-sm">
-              <Field label={t('finance.invoices.issueDate')} value={invoice.issue_date} mono />
-              <Field label={t('finance.invoices.dueDate')} value={invoice.due_date ?? '—'} mono />
-              <Field label={t('finance.invoices.subtotal')} value={`${Number(invoice.subtotal).toFixed(3)}`} mono />
-              <Field label={t('finance.invoices.discount')} value={`${Number(invoice.discount).toFixed(3)}`} mono />
-              <Field label={t('common.total')} value={`${Number(invoice.total_amount).toFixed(3)}`} mono />
-              <Field label={t('finance.invoices.balance')} value={`${Number(invoice.balance).toFixed(3)}`} mono />
-            </div>
-            {invoice.notes && (
-              <div className="pt-4 mt-4 border-t border-gray-200">
-                <Label>{t('common.notes')}</Label>
-                <p className="text-sm text-gray-700 whitespace-pre-wrap">{invoice.notes}</p>
-              </div>
-            )}
-          </Card>
-
-          <Card className="p-6">
-            <h2 className="font-semibold mb-3">{t('operations.jobs.lineItems')}</h2>
-            {lines.length === 0 ? (
-              <p className="text-sm text-gray-500 py-3">{t('operations.jobs.noLines')}</p>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="text-xs text-gray-500 border-b border-gray-200">
-                    <tr>
-                      <th className="text-start py-2">{t('common.name')}</th>
-                      <th className="text-end py-2 w-20">{t('masters.unit')}</th>
-                      <th className="text-end py-2 w-16">×</th>
-                      <th className="text-end py-2 w-24">{t('masters.sellingPrice')}</th>
-                      <th className="text-end py-2 w-24">{t('common.total')}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {lines.map((l) => (
-                      <tr key={l.id} className="border-b border-gray-100 last:border-b-0">
-                        <td className="py-2" dir="auto">
-                          <div>{locale === 'ar' ? l.description_ar : (l.description_en || l.description_ar)}</div>
-                          {l.is_covered && (
-                            <span className="inline-block mt-0.5 px-1.5 py-0.5 rounded bg-green-100 text-green-700 text-[10px]">
-                              {t('operations.jobs.covered')}
-                            </span>
-                          )}
-                        </td>
-                        <td className="text-end font-mono text-xs">{l.unit}</td>
-                        <td className="text-end font-mono">{l.quantity}</td>
-                        <td className="text-end font-mono">{Number(l.unit_price).toFixed(3)}</td>
-                        <td className="text-end font-mono">{Number(l.line_total).toFixed(3)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </Card>
-        </div>
-
-        {/* Right: payments */}
-        <div className="space-y-6">
-          <Card className="p-6">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="font-semibold">{t('finance.payments.title')}</h2>
-              {canAddPayment && Number(invoice.balance) > 0 && !['cancelled','void'].includes(invoice.status) && !showPay && (
-                <Button size="sm" onClick={() => { setPay((s) => ({ ...s, amount: Number(invoice.balance) })); setShowPay(true); }}>
-                  <Plus className="w-4 h-4 me-1" />{t('finance.invoices.recordPayment')}
-                </Button>
+          {showRequests && openRequests && (
+            <StatWidget
+              title={t('dashboard.openRequests')}
+              value={fmt(openRequests.total)}
+              subtitle={t('dashboard.openRequestsSubtitle')}
+              icon={AlertCircle}
+              tone={openRequests.emergency > 0 ? 'red' : 'amber'}
+              href="/operations/requests"
+            >
+              {openRequests.total > 0 && (
+                <div className="flex items-center gap-2 text-xs flex-wrap">
+                  {openRequests.emergency > 0 && (
+                    <PriorityBadge color="bg-red-100 text-red-700" label={`${openRequests.emergency} emergency`} />
+                  )}
+                  {openRequests.high > 0 && (
+                    <PriorityBadge color="bg-amber-100 text-amber-700" label={`${openRequests.high} high`} />
+                  )}
+                  {openRequests.normal > 0 && (
+                    <PriorityBadge color="bg-blue-100 text-blue-700" label={`${openRequests.normal} normal`} />
+                  )}
+                </div>
               )}
-            </div>
+            </StatWidget>
+          )}
 
-            {showPay && (
-              <div className="mb-4 p-4 rounded-lg bg-gray-50 border border-gray-200 space-y-3">
-                <div className="flex items-center justify-between">
-                  <h3 className="font-medium">{t('finance.invoices.recordPayment')}</h3>
-                  <button onClick={() => setShowPay(false)} className="p-1 rounded hover:bg-gray-100"><X className="w-4 h-4" /></button>
-                </div>
-                <div>
-                  <Label htmlFor="pay_amt" required>{t('finance.payments.amount')}</Label>
-                  <Input id="pay_amt" type="number" step="0.001" value={pay.amount}
-                    onChange={(e) => setPay((s) => ({ ...s, amount: Number(e.target.value) || 0 }))} dir="ltr" />
-                </div>
-                <div>
-                  <Label htmlFor="pay_method" required>{t('finance.payments.method')}</Label>
-                  <select id="pay_method" value={pay.method}
-                    onChange={(e) => setPay((s) => ({ ...s, method: e.target.value as any }))}
-                    className="w-full h-10 px-3 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white">
-                    {PAYMENT_METHODS.map((m) => (<option key={m} value={m}>{t(`finance.payments.methods.${m}` as any)}</option>))}
-                  </select>
-                </div>
-                <div>
-                  <Label htmlFor="pay_date" required>{t('finance.payments.paymentDate')}</Label>
-                  <Input id="pay_date" type="date" value={pay.payment_date}
-                    onChange={(e) => setPay((s) => ({ ...s, payment_date: e.target.value }))} dir="ltr" />
-                </div>
-                <div>
-                  <Label htmlFor="pay_ref">{t('finance.payments.reference')}</Label>
-                  <Input id="pay_ref" value={pay.reference}
-                    onChange={(e) => setPay((s) => ({ ...s, reference: e.target.value }))} dir="ltr" />
-                </div>
-                <Button onClick={submitPayment} disabled={busy} className="w-full">
-                  {busy ? t('common.loading') : t('common.save')}
-                </Button>
+          {showInvoices && overdueInvoices && (
+            <StatWidget
+              title={t('dashboard.overdueInvoices')}
+              value={fmt(overdueInvoices.count_overdue)}
+              subtitle={
+                overdueInvoices.total_overdue > 0
+                  ? `${fmtKwd(overdueInvoices.total_overdue)} ${t('dashboard.overdueInvoicesSubtitle')}`
+                  : t('dashboard.overdueInvoicesSubtitle')
+              }
+              icon={Receipt}
+              tone={overdueInvoices.count_overdue > 0 ? 'red' : 'green'}
+              href="/finance/invoices?status=outstanding"
+            >
+              <div className="flex items-center gap-3 text-xs flex-wrap">
+                <Stat label={t('dashboard.dueSoon')} value={fmt(overdueInvoices.count_due_soon)} color="text-amber-600" />
+                <Stat label={t('dashboard.totalOutstanding')} value={fmtKwd(overdueInvoices.total_outstanding)} color="text-gray-600" />
               </div>
-            )}
+            </StatWidget>
+          )}
 
-            {payments.length === 0 ? (
-              <p className="text-sm text-gray-500 py-3">{t('common.noData')}</p>
-            ) : (
-              <div className="space-y-2">
-                {payments.map((p) => (
-                  <div key={p.id} className="flex items-center justify-between p-3 rounded-md border border-gray-200">
-                    <div>
-                      <div className="font-mono text-xs text-gray-500">{p.payment_no}</div>
-                      <div className="font-medium font-mono text-sm">{Number(p.amount).toFixed(3)} KWD</div>
-                      <div className="text-xs text-gray-500">
-                        {t(`finance.payments.methods.${p.method}` as any)} · {p.payment_date}
-                      </div>
-                      {p.reference && <div className="text-xs text-gray-500" dir="auto">{p.reference}</div>}
-                    </div>
-                    {canAddPayment && (
-                      <button onClick={() => removePayment(p.id)} className="p-1.5 rounded text-red-600 hover:bg-red-50">
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </Card>
-
-          {canEditInvoice && !['cancelled','void'].includes(invoice.status) && (
-            <Card className="p-6">
-              <Button variant="outline" onClick={voidInvoice} disabled={busy} className="w-full text-red-600 hover:bg-red-50">
-                {t('finance.invoices.void')}
-              </Button>
-            </Card>
+          {showInvoices && revenueMtd && (
+            <StatWidget
+              title={t('dashboard.revenueMtd')}
+              value={fmtKwd(revenueMtd.mtd_total)}
+              subtitle={
+                revenueDelta !== null ? (
+                  <span className={revenueDelta >= 0 ? 'text-green-600' : 'text-red-600'}>
+                    {revenueDelta >= 0 ? '↑' : '↓'} {Math.abs(revenueDelta)}% {t('dashboard.vsLastMonth')}
+                  </span>
+                ) : (
+                  t('dashboard.revenueMtdSubtitle')
+                )
+              }
+              icon={TrendingUp}
+              tone="green"
+              href="/finance/invoices"
+            >
+              <Sparkline data={revenueMtd.daily_series} height={36} />
+            </StatWidget>
           )}
         </div>
+
+        {!showJobs && !showRequests && !showInvoices && (
+          <div className="bg-white p-8 rounded-lg border border-gray-200 text-center text-sm text-gray-500">
+            {t('dashboard.noActivity')}
+          </div>
+        )}
       </div>
     </>
   );
 }
 
-function Field({ label, value, mono }: { label: string; value: React.ReactNode; mono?: boolean }) {
+function Stat({ label, value, color }: { label: string; value: string; color: string }) {
   return (
     <div>
-      <div className="text-xs text-gray-500 mb-0.5">{label}</div>
-      <div className={`font-medium ${mono ? 'font-mono text-sm' : ''}`}>{value}</div>
+      <span className={`font-mono font-semibold ${color}`}>{value}</span>
+      <span className="text-gray-500 ms-1">{label}</span>
     </div>
   );
+}
+
+function PriorityBadge({ color, label }: { color: string; label: string }) {
+  return <span className={`px-1.5 py-0.5 rounded ${color} text-[11px] font-medium`}>{label}</span>;
 }

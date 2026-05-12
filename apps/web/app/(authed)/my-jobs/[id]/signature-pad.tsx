@@ -1,207 +1,245 @@
 'use client';
 
-import { useRef, useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { X } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { Plus, Pencil } from 'lucide-react';
+import { DataTable, type Column } from '@/components/ui/data-table';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { Alert } from '@/components/ui/alert';
+import { Card } from '@/components/ui/card';
+import type { SparePartMaster, SparePartCategory, MachineCategory, MachineBrand } from '@k3/repositories';
 
 interface Props {
-  jobId: string;
-  onSubmit: (paths: { technician: string; customer?: string; customerName?: string }) => Promise<void>;
-  onClose: () => void;
+  title: string;
+  rows: any[];
+  total: number;
+  partCategories: SparePartCategory[];
+  machineCategories: MachineCategory[];
+  brands: MachineBrand[];
+  canAdd: boolean;
+  canEdit: boolean;
+  locale: 'ar' | 'en';
 }
 
-/**
- * Touch+mouse signature pad. Two pads stacked: technician (required), customer (optional).
- * Each is rendered as a canvas, then exported as PNG and uploaded to /api/signatures.
- */
-export function SignaturePad({ jobId, onSubmit, onClose }: Props) {
+export function SparePartsClient(props: Props) {
   const t = useTranslations();
-  const techRef = useRef<HTMLCanvasElement | null>(null);
-  const custRef = useRef<HTMLCanvasElement | null>(null);
-  const [techHasInk, setTechHasInk] = useState(false);
-  const [custHasInk, setCustHasInk] = useState(false);
-  const [customerName, setCustomerName] = useState('');
+  const router = useRouter();
+  const lbl = (c: { name_ar: string; name_en: string }) => props.locale === 'ar' ? c.name_ar : c.name_en;
+  const [editing, setEditing] = useState<any>(null);
+  const [creating, setCreating] = useState(false);
+  const [form, setForm] = useState<any>(emptyForm(props));
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  useEffect(() => {
-    [techRef.current, custRef.current].forEach((c) => {
-      if (!c) return;
-      const ctx = c.getContext('2d');
-      if (!ctx) return;
-      ctx.fillStyle = '#fff';
-      ctx.fillRect(0, 0, c.width, c.height);
-      ctx.strokeStyle = '#1f2937';
-      ctx.lineWidth = 2.2;
-      ctx.lineJoin = 'round';
-      ctx.lineCap = 'round';
-    });
-  }, []);
-
-  const bind = (canvas: HTMLCanvasElement | null, setHasInk: (b: boolean) => void) => {
-    if (!canvas) return;
-    let drawing = false;
-    let last: { x: number; y: number } | null = null;
-
-    const pos = (e: MouseEvent | TouchEvent): { x: number; y: number } => {
-      const rect = canvas.getBoundingClientRect();
-      const t = (e as TouchEvent).touches?.[0];
-      const cx = t ? t.clientX : (e as MouseEvent).clientX;
-      const cy = t ? t.clientY : (e as MouseEvent).clientY;
-      return {
-        x: ((cx - rect.left) * canvas.width) / rect.width,
-        y: ((cy - rect.top) * canvas.height) / rect.height,
-      };
+  function emptyForm(p: Props): any {
+    return {
+      category_id: p.partCategories[0]?.id ?? '',
+      part_type: '',
+      name_ar: '', name_en: '',
+      brand_id: '', model: '', country_origin: '',
+      compatible_categories: [],
+      unit: 'piece',
+      cost_price: 0, selling_price: 0,
+      notes: '', is_active: true,
     };
+  }
 
-    const start = (e: MouseEvent | TouchEvent) => {
-      e.preventDefault();
-      drawing = true;
-      last = pos(e);
-    };
-    const move = (e: MouseEvent | TouchEvent) => {
-      if (!drawing) return;
-      e.preventDefault();
-      const ctx = canvas.getContext('2d');
-      if (!ctx || !last) return;
-      const cur = pos(e);
-      ctx.beginPath();
-      ctx.moveTo(last.x, last.y);
-      ctx.lineTo(cur.x, cur.y);
-      ctx.stroke();
-      last = cur;
-      setHasInk(true);
-    };
-    const end = () => { drawing = false; last = null; };
-
-    canvas.addEventListener('mousedown', start);
-    canvas.addEventListener('mousemove', move);
-    window.addEventListener('mouseup', end);
-    canvas.addEventListener('touchstart', start, { passive: false });
-    canvas.addEventListener('touchmove', move, { passive: false });
-    canvas.addEventListener('touchend', end);
-  };
-
-  useEffect(() => {
-    bind(techRef.current, setTechHasInk);
-    bind(custRef.current, setCustHasInk);
-    // No cleanup needed — canvas elements unmount with the modal
-  }, []);
-
-  const clear = (ref: React.RefObject<HTMLCanvasElement>, setHasInk: (b: boolean) => void) => {
-    const c = ref.current;
-    if (!c) return;
-    const ctx = c.getContext('2d');
-    if (!ctx) return;
-    ctx.fillStyle = '#fff';
-    ctx.fillRect(0, 0, c.width, c.height);
-    setHasInk(false);
-  };
-
-  const exportPng = (ref: React.RefObject<HTMLCanvasElement>): Promise<Blob | null> =>
-    new Promise((resolve) => ref.current?.toBlob((b) => resolve(b), 'image/png'));
-
-  const upload = async (blob: Blob, kind: 'technician' | 'customer'): Promise<string> => {
-    const fd = new FormData();
-    fd.append('file', blob, `${kind}.png`);
-    fd.append('job_id', jobId);
-    fd.append('kind', kind);
-    const res = await fetch('/api/signatures/upload', { method: 'POST', body: fd });
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      throw new Error(body.error ?? `${res.status}`);
-    }
-    const body = await res.json();
-    return body.path as string;
-  };
-
-  const submit = async () => {
-    setError(null);
-    if (!techHasInk) { setError('Technician signature is required'); return; }
-    setSubmitting(true);
-    try {
-      const techBlob = await exportPng(techRef);
-      if (!techBlob) throw new Error('Failed to capture technician signature');
-      const techPath = await upload(techBlob, 'technician');
-
-      let custPath: string | undefined;
-      if (custHasInk) {
-        const cBlob = await exportPng(custRef);
-        if (cBlob) custPath = await upload(cBlob, 'customer');
-      }
-
-      await onSubmit({
-        technician: techPath,
-        customer: custPath,
-        customerName: customerName.trim() || undefined,
+  const open = (row?: any) => {
+    if (row) {
+      setEditing(row);
+      setCreating(false);
+      setForm({
+        category_id: row.category_id,
+        part_type: row.part_type ?? '',
+        name_ar: row.name_ar ?? '',
+        name_en: row.name_en ?? '',
+        brand_id: row.brand_id ?? '',
+        model: row.model ?? '',
+        country_origin: row.country_origin ?? '',
+        compatible_categories: row.compatible_categories ?? [],
+        unit: row.unit ?? 'piece',
+        cost_price: row.cost_price ?? 0,
+        selling_price: row.selling_price ?? 0,
+        notes: row.notes ?? '',
+        is_active: row.is_active,
       });
+    } else {
+      setCreating(true); setEditing(null); setForm(emptyForm(props));
+    }
+    setError(null);
+  };
+  const close = () => { setCreating(false); setEditing(null); setError(null); };
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null); setSubmitting(true);
+    try {
+      const url = editing ? `/api/masters/spare-parts/${editing.id}` : '/api/masters/spare-parts';
+      const method = editing ? 'PATCH' : 'POST';
+      const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? `${res.status}`);
+      }
+      close();
+      router.refresh();
     } catch (e) {
       setError((e as Error).message);
-    } finally {
-      setSubmitting(false);
-    }
+    } finally { setSubmitting(false); }
+  };
+
+  const columns: Column<any>[] = [
+    { key: 'part_code', header: t('masters.partCode'), className: 'w-32 font-mono text-xs' },
+    { key: 'name_ar', header: t('common.name_ar'), cell: (r) => <span className="font-medium">{r.name_ar}</span> },
+    { key: 'name_en', header: t('common.name_en'), hideOnMobile: true },
+    { key: 'category', header: t('masters.sparePartCategories'), hideOnMobile: true,
+      cell: (r) => r.category ? lbl(r.category) : '—' },
+    { key: 'brand', header: t('masters.machineBrands'), hideOnMobile: true,
+      cell: (r) => r.brand?.name ?? '—' },
+    { key: 'selling_price', header: t('masters.sellingPrice'), align: 'end',
+      cell: (r) => Number(r.selling_price ?? 0).toFixed(3) },
+    { key: 'is_active', header: t('common.status'), align: 'center',
+      cell: (r) => r.is_active ? (
+        <span className="inline-block px-2 py-0.5 rounded-full bg-green-50 text-green-700 text-xs">{t('common.active')}</span>
+      ) : (<span className="inline-block px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 text-xs">{t('common.inactive')}</span>),
+    },
+  ];
+  if (props.canEdit) {
+    columns.push({
+      key: '__actions', header: '', align: 'end',
+      cell: (r) => (
+        <button onClick={() => open(r)} className="inline-flex items-center gap-1 text-brand-600 hover:text-brand-700 text-sm">
+          <Pencil className="w-3.5 h-3.5" />{t('common.edit')}
+        </button>
+      ),
+    });
+  }
+
+  const toggleCat = (id: string) => {
+    setForm((s: any) => ({
+      ...s,
+      compatible_categories: s.compatible_categories.includes(id)
+        ? s.compatible_categories.filter((c: string) => c !== id)
+        : [...s.compatible_categories, id],
+    }));
   };
 
   return (
-    <div className="fixed inset-0 z-30 flex items-end sm:items-center justify-center bg-black/40 p-0 sm:p-4">
-      <div className="bg-white w-full max-w-lg rounded-t-2xl sm:rounded-2xl flex flex-col max-h-[95vh]">
-        <div className="flex items-center justify-between p-4 border-b border-gray-200">
-          <h3 className="font-semibold">{t('operations.jobs.signatures')}</h3>
-          <button onClick={onClose} className="p-1 -m-1 rounded-md hover:bg-gray-100">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
-          {error && <Alert variant="destructive">{error}</Alert>}
-
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <Label required>{t('operations.jobs.technicianSignature')}</Label>
-              <button onClick={() => clear(techRef, setTechHasInk)} className="text-xs text-gray-500 hover:text-gray-800">
-                {t('operations.jobs.clearSignature')}
-              </button>
+    <div className="space-y-6">
+      <h1 className="text-2xl font-bold text-gray-900">{props.title}</h1>
+      {(creating || editing) && (
+        <Card className="p-6">
+          <h2 className="text-lg font-semibold mb-4">{editing ? t('common.edit') : t('common.new')}</h2>
+          <form onSubmit={submit} className="space-y-4">
+            {error && <Alert variant="destructive">{error}</Alert>}
+            <div className="grid sm:grid-cols-2 gap-4">
+              <div>
+                <Label required>{t('masters.sparePartCategories')}</Label>
+                <select
+                  value={form.category_id}
+                  onChange={(e) => setForm((s: any) => ({ ...s, category_id: e.target.value }))}
+                  className="w-full h-10 px-3 rounded-md border border-gray-300 bg-white"
+                >
+                  <option value="">—</option>
+                  {props.partCategories.map((c) => <option key={c.id} value={c.id}>{lbl(c)}</option>)}
+                </select>
+              </div>
+              <div>
+                <Label>{t('masters.machineBrands')}</Label>
+                <select
+                  value={form.brand_id ?? ''}
+                  onChange={(e) => setForm((s: any) => ({ ...s, brand_id: e.target.value || null }))}
+                  className="w-full h-10 px-3 rounded-md border border-gray-300 bg-white"
+                >
+                  <option value="">—</option>
+                  {props.brands.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <Label required>{t('common.name_ar')}</Label>
+                <Input value={form.name_ar} onChange={(e) => setForm((s: any) => ({ ...s, name_ar: e.target.value }))} dir="rtl" />
+              </div>
+              <div>
+                <Label required>{t('common.name_en')}</Label>
+                <Input value={form.name_en} onChange={(e) => setForm((s: any) => ({ ...s, name_en: e.target.value }))} dir="ltr" />
+              </div>
+              <div>
+                <Label>Model</Label>
+                <Input value={form.model ?? ''} onChange={(e) => setForm((s: any) => ({ ...s, model: e.target.value }))} dir="ltr" />
+              </div>
+              <div>
+                <Label>{t('masters.countryOrigin')}</Label>
+                <Input value={form.country_origin ?? ''} onChange={(e) => setForm((s: any) => ({ ...s, country_origin: e.target.value }))} dir="ltr" />
+              </div>
+              <div>
+                <Label>{t('masters.unit')}</Label>
+                <select
+                  value={form.unit}
+                  onChange={(e) => setForm((s: any) => ({ ...s, unit: e.target.value }))}
+                  className="w-full h-10 px-3 rounded-md border border-gray-300 bg-white"
+                >
+                  <option value="piece">{t('masters.units.piece')}</option>
+                  <option value="meter">{t('masters.units.meter')}</option>
+                  <option value="kg">{t('masters.units.kg')}</option>
+                  <option value="set">{t('masters.units.set')}</option>
+                  <option value="liter">{t('masters.units.liter')}</option>
+                </select>
+              </div>
+              <div className="flex items-end gap-2 pb-2">
+                <Switch checked={form.is_active} onCheckedChange={(v) => setForm((s: any) => ({ ...s, is_active: v }))} />
+                <Label className="!mb-0">{t('common.active')}</Label>
+              </div>
+              <div>
+                <Label>{t('masters.costPrice')}</Label>
+                <Input type="number" step="0.001" value={form.cost_price}
+                  onChange={(e) => setForm((s: any) => ({ ...s, cost_price: Number(e.target.value) }))} />
+              </div>
+              <div>
+                <Label>{t('masters.sellingPrice')}</Label>
+                <Input type="number" step="0.001" value={form.selling_price}
+                  onChange={(e) => setForm((s: any) => ({ ...s, selling_price: Number(e.target.value) }))} />
+              </div>
             </div>
-            <canvas
-              ref={techRef}
-              width={600}
-              height={180}
-              className="w-full border border-gray-300 rounded-lg bg-white touch-none"
-            />
-          </div>
-
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <Label>{t('operations.jobs.customerSignature')} ({t('common.optional')})</Label>
-              <button onClick={() => clear(custRef, setCustHasInk)} className="text-xs text-gray-500 hover:text-gray-800">
-                {t('operations.jobs.clearSignature')}
-              </button>
+            <div>
+              <Label>{t('masters.compatibleCategories')}</Label>
+              <div className="flex flex-wrap gap-2 mt-1 p-3 rounded-md border border-gray-200 bg-gray-50">
+                {props.machineCategories.map((c) => (
+                  <button
+                    type="button"
+                    key={c.id}
+                    onClick={() => toggleCat(c.id)}
+                    className={`px-3 py-1 text-xs rounded-full border ${
+                      form.compatible_categories.includes(c.id)
+                        ? 'bg-brand-600 text-white border-brand-600'
+                        : 'bg-white text-gray-700 border-gray-300 hover:border-gray-400'
+                    }`}
+                  >
+                    {lbl(c)}
+                  </button>
+                ))}
+              </div>
             </div>
-            <canvas
-              ref={custRef}
-              width={600}
-              height={180}
-              className="w-full border border-gray-300 rounded-lg bg-white touch-none"
-            />
-          </div>
-
-          <div>
-            <Label htmlFor="customer_name">{t('operations.jobs.customerSignatureName')}</Label>
-            <Input id="customer_name" value={customerName} onChange={(e) => setCustomerName(e.target.value)} />
-          </div>
-        </div>
-
-        <div className="p-4 border-t border-gray-200 flex gap-2">
-          <Button variant="outline" className="flex-1" onClick={onClose}>{t('common.cancel')}</Button>
-          <Button className="flex-1" onClick={submit} disabled={submitting || !techHasInk}>
-            {submitting ? t('common.loading') : t('operations.jobs.saveSignature')}
-          </Button>
-        </div>
-      </div>
+            <div className="flex items-center gap-2 pt-2">
+              <Button type="submit" disabled={submitting}>{submitting ? t('common.loading') : t('common.save')}</Button>
+              <Button type="button" variant="outline" onClick={close}>{t('common.cancel')}</Button>
+            </div>
+          </form>
+        </Card>
+      )}
+      <DataTable
+        rows={props.rows}
+        columns={columns}
+        total={props.total}
+        page={1}
+        pageSize={50}
+        rightAction={props.canAdd && !creating && !editing ? (
+          <Button onClick={() => open()}><Plus className="w-4 h-4 me-1" />{t('common.add')}</Button>
+        ) : undefined}
+      />
     </div>
   );
 }

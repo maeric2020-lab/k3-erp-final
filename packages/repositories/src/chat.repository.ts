@@ -1,5 +1,4 @@
-import type { SupabaseClient } from '@supabase/supabase-js';
-import type { Database, Tables } from '@k3/shared-types';
+import type { K3SupabaseClient, Database, Tables } from '@k3/shared-types';
 
 export type ChatThread = Tables<'chat_threads'>;
 export type ChatThreadMember = Tables<'chat_thread_members'>;
@@ -30,7 +29,7 @@ export interface ChatMessageWithSender extends ChatMessage {
 }
 
 export class ChatThreadsRepository {
-  constructor(private readonly db: SupabaseClient<Database>) {}
+  constructor(private readonly db: K3SupabaseClient) {}
 
   /** List threads for the current user with last message + unread count. */
   async summary(): Promise<ChatThreadSummary[]> {
@@ -107,7 +106,7 @@ export class ChatThreadsRepository {
 }
 
 export class ChatMessagesRepository {
-  constructor(private readonly db: SupabaseClient<Database>) {}
+  constructor(private readonly db: K3SupabaseClient) {}
 
   async list(threadId: string, opts: { before?: string; limit?: number } = {}): Promise<ChatMessageWithSender[]> {
     let q = this.db

@@ -1,5 +1,4 @@
-import type { SupabaseClient } from '@supabase/supabase-js';
-import type { Database } from '@k3/shared-types';
+import type { K3SupabaseClient, Database } from '@k3/shared-types';
 import { UsersProfileRepository, type UserProfile } from '@k3/repositories';
 
 /**
@@ -17,7 +16,7 @@ import { UsersProfileRepository, type UserProfile } from '@k3/repositories';
 export class UserInvitationService {
   private readonly profiles: UsersProfileRepository;
 
-  constructor(private readonly adminDb: SupabaseClient<Database>) {
+  constructor(private readonly adminDb: K3SupabaseClient) {
     // The admin client must NOT be used for the profile-write path's RLS;
     // however since we're called server-side on an admin-permitted endpoint
     // we use it directly here for atomicity.

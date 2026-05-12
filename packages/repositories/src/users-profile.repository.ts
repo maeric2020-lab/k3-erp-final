@@ -1,10 +1,9 @@
-import type { SupabaseClient } from '@supabase/supabase-js';
-import type { Database, Tables, TablesInsert, TablesUpdate } from '@k3/shared-types';
+import type { K3SupabaseClient, Database, Tables, TablesInsert, TablesUpdate } from '@k3/shared-types';
 
 export type UserProfile = Tables<'users_profile'>;
 
 export class UsersProfileRepository {
-  constructor(private readonly db: SupabaseClient<Database>) {}
+  constructor(private readonly db: K3SupabaseClient) {}
 
   async getCurrent(): Promise<UserProfile | null> {
     const { data: authData } = await this.db.auth.getUser();

@@ -1,5 +1,4 @@
-import type { SupabaseClient } from '@supabase/supabase-js';
-import type { Database, Tables } from '@k3/shared-types';
+import type { K3SupabaseClient, Database, Tables } from '@k3/shared-types';
 import { CrudRepository } from './_base';
 
 // تُستورَد الأنواع من ملفّاتها الأصلية لتفادي التكرار
@@ -25,7 +24,7 @@ export interface PermissionGridRow {
 // (PermissionsRepository موجود لفحوصات الـ runtime؛ هذا للواجهة الإدارية للمرحلة 5)
 // -----------------------------------------------------------------------------
 export class UserPermissionsAdminRepository {
-  constructor(private readonly db: SupabaseClient<Database>) {}
+  constructor(private readonly db: K3SupabaseClient) {}
 
   async listForUser(userId: string): Promise<UserScreenPermission[]> {
     const { data, error } = await this.db
@@ -108,7 +107,7 @@ export class UserPermissionsAdminRepository {
 // PermissionTemplatesRepository
 // -----------------------------------------------------------------------------
 export class PermissionTemplatesRepository extends CrudRepository<'permission_templates'> {
-  constructor(db: SupabaseClient<Database>) {
+  constructor(db: K3SupabaseClient) {
     super(db, 'permission_templates', ['name', 'description']);
   }
 
@@ -127,7 +126,7 @@ export class PermissionTemplatesRepository extends CrudRepository<'permission_te
 // PermissionTemplateItemsRepository
 // -----------------------------------------------------------------------------
 export class PermissionTemplateItemsRepository {
-  constructor(private readonly db: SupabaseClient<Database>) {}
+  constructor(private readonly db: K3SupabaseClient) {}
 
   async listForTemplate(templateId: string): Promise<PermissionTemplateItem[]> {
     const { data, error } = await this.db
@@ -185,7 +184,7 @@ export interface AuditLogFilters {
 }
 
 export class AuditLogRepository {
-  constructor(private readonly db: SupabaseClient<Database>) {}
+  constructor(private readonly db: K3SupabaseClient) {}
 
   async list(f: AuditLogFilters = {}): Promise<AuditLog[]> {
     let q = this.db.from('audit_log').select('*');

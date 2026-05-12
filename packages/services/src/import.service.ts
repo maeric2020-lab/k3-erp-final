@@ -1,5 +1,4 @@
-import type { SupabaseClient } from '@supabase/supabase-js';
-import type { Database, Json } from '@k3/shared-types';
+import type { K3SupabaseClient, Database, Json } from '@k3/shared-types';
 import { ImportsRepository, type ImportRun, type ImportRunRow } from '@k3/repositories';
 import {
   readWorkbookFromBuffer,
@@ -33,12 +32,12 @@ export interface PreparedRow {
   action: RowAction;
   target_table: string | null;
   /** Closure that performs the actual insert/update during commit. Resolved when row is valid. */
-  apply: ((db: SupabaseClient<Database>) => Promise<{ id: string }>) | null;
+  apply: ((db: K3SupabaseClient) => Promise<{ id: string }>) | null;
 }
 
 export interface ImporterContext {
   /** RLS-bound client (the user performing the import). */
-  db: SupabaseClient<Database>;
+  db: K3SupabaseClient;
   /** Optional row-by-row hook — useful for tests/logging. */
   onProgress?: (n: number, total: number) => void;
 }
@@ -68,7 +67,7 @@ export class ImportService {
   private readonly imports: ImportsRepository;
   private readonly registry = new Map<ImportTemplate, Importer>();
 
-  constructor(private readonly db: SupabaseClient<Database>) {
+  constructor(private readonly db: K3SupabaseClient) {
     this.imports = new ImportsRepository(db);
   }
 

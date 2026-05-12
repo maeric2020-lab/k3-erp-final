@@ -1,5 +1,4 @@
-import type { SupabaseClient } from '@supabase/supabase-js';
-import type { Database, Tables } from '@k3/shared-types';
+import type { K3SupabaseClient, Database, Tables } from '@k3/shared-types';
 import { CrudRepository, type ListOptions } from './_base';
 
 export type Quotation = Tables<'quotations'>;
@@ -13,7 +12,7 @@ export type CompressorBracket = Tables<'compressor_install_brackets'>;
 // QuotationsRepository
 // -----------------------------------------------------------------------------
 export class QuotationsRepository extends CrudRepository<'quotations'> {
-  constructor(db: SupabaseClient<Database>) {
+  constructor(db: K3SupabaseClient) {
     super(db, 'quotations', ['quotation_no', 'notes']);
   }
 
@@ -38,7 +37,7 @@ export class QuotationsRepository extends CrudRepository<'quotations'> {
 // InvoicesRepository
 // -----------------------------------------------------------------------------
 export class InvoicesRepository extends CrudRepository<'invoices'> {
-  constructor(db: SupabaseClient<Database>) {
+  constructor(db: K3SupabaseClient) {
     super(db, 'invoices', ['invoice_no', 'notes']);
   }
 
@@ -79,7 +78,7 @@ export class InvoicesRepository extends CrudRepository<'invoices'> {
 // PaymentsRepository
 // -----------------------------------------------------------------------------
 export class PaymentsRepository extends CrudRepository<'payments'> {
-  constructor(db: SupabaseClient<Database>) {
+  constructor(db: K3SupabaseClient) {
     super(db, 'payments', ['payment_no', 'reference', 'notes']);
   }
 
@@ -108,7 +107,7 @@ export class PaymentsRepository extends CrudRepository<'payments'> {
 // ContractClauseTemplatesRepository
 // -----------------------------------------------------------------------------
 export class ContractClauseTemplatesRepository extends CrudRepository<'contract_clause_templates'> {
-  constructor(db: SupabaseClient<Database>) {
+  constructor(db: K3SupabaseClient) {
     super(db, 'contract_clause_templates', ['code', 'title_ar', 'title_en']);
   }
 
@@ -137,7 +136,7 @@ export class ContractClauseTemplatesRepository extends CrudRepository<'contract_
 // ContractClausesRepository — per-contract clauses
 // -----------------------------------------------------------------------------
 export class ContractClausesRepository extends CrudRepository<'contract_clauses'> {
-  constructor(db: SupabaseClient<Database>) {
+  constructor(db: K3SupabaseClient) {
     super(db, 'contract_clauses', ['code', 'title_ar']);
   }
 
@@ -161,7 +160,7 @@ export class ContractClausesRepository extends CrudRepository<'contract_clauses'
 // CompressorBracketsRepository
 // -----------------------------------------------------------------------------
 export class CompressorBracketsRepository extends CrudRepository<'compressor_install_brackets'> {
-  constructor(db: SupabaseClient<Database>) {
+  constructor(db: K3SupabaseClient) {
     super(db, 'compressor_install_brackets', []);
   }
 

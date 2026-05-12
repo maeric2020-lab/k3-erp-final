@@ -1,10 +1,9 @@
-import type { SupabaseClient } from '@supabase/supabase-js';
-import type { Database, ScreenAction, Tables } from '@k3/shared-types';
+import type { K3SupabaseClient, Database, ScreenAction, Tables } from '@k3/shared-types';
 
 export type UserScreenPermission = Tables<'user_screen_permissions'>;
 
 export class PermissionsRepository {
-  constructor(private readonly db: SupabaseClient<Database>) {}
+  constructor(private readonly db: K3SupabaseClient) {}
 
   /**
    * Server-authoritative permission check via Postgres RPC.

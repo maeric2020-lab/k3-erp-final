@@ -1,155 +1,273 @@
 'use client';
 
-import { useState } from 'react';
-import { useTranslations, useLocale } from 'next-intl';
+import { useState, useEffect } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
-import { Briefcase, ArrowRight } from 'lucide-react';
-import { Card } from '@/components/ui/card';
+import { useTranslations } from 'next-intl';
+import { maintenanceRequestSchema, type MaintenanceRequestInput, PROBLEM_CODES, REQUEST_TYPES } from '@k3/validators';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Alert } from '@/components/ui/alert';
-import { Label } from '@/components/ui/label';
-import type {
-  MaintenanceRequest, Customer, CustomerSite, CustomerMachine, Contract, Job,
-} from '@k3/repositories';
 
-interface Tech { id: string; full_name_ar: string | null; full_name_en: string | null; technician_id: string | null }
+interface SiteOption  { id: string; label: string; is_primary: boolean }
+interface MachineOption { id: string; label: string }
+interface ContractOption { id: string; label: string; type: string }
 
 interface Props {
-  request: MaintenanceRequest;
-  customer: Customer | null;
-  site: CustomerSite | null;
-  machine: CustomerMachine | null;
-  contract: Contract | null;
-  jobs: Job[];
-  technicians: Tech[];
-  canCreateJob: boolean;
+  customers: Array<{ id: string; label: string }>;
+  allowOtherProblem: boolean;
 }
 
-export function RequestDetailClient({ request: req, customer, site, machine, contract, jobs, technicians, canCreateJob }: Props) {
+export function RequestForm({ customers, allowOtherProblem }: Props) {
   const t = useTranslations();
-  const locale = useLocale();
   const router = useRouter();
-  const [techId, setTechId] = useState<string>('');
-  const [creating, setCreating] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [serverError, setServerError] = useState<string | null>(null);
+  const [sites, setSites] = useState<SiteOption[]>([]);
+  const [machines, setMachines] = useState<MachineOption[]>([]);
+  const [contracts, setContracts] = useState<ContractOption[]>([]);
 
-  const convertToJob = async () => {
-    setError(null);
-    setCreating(true);
+  const form = useForm<MaintenanceRequestInput>({
+    resolver: zodResolver(maintenanceRequestSchema),
+    defaultValues: {
+      customer_id: '',
+      site_id: null,
+      customer_machine_id: null,
+      contract_id: null,
+      request_type: 'CASH',
+      problem_code: 'no_cooling',
+      problem_description: '',
+      reported_by: '',
+      reported_phone: '',
+      scheduled_date: null,
+      scheduled_time: null,
+      priority: 'normal',
+      notes: '',
+    },
+  });
+
+  const customerId = form.watch('customer_id');
+  const requestType = form.watch('request_type');
+  const problemCode = form.watch('problem_code');
+
+  // Load dependent data when customer changes
+  useEffect(() => {
+    if (!customerId) {
+      setSites([]); setMachines([]); setContracts([]);
+      return;
+    }
+    let abort = false;
+    (async () => {
+      try {
+        const [sitesRes, machinesRes, contractsRes] = await Promise.all([
+          fetch(`/api/customers/${customerId}/sites`),
+          fetch(`/api/operations/customer-machines?customer_id=${customerId}`),
+          fetch(`/api/contracts?customer_id=${customerId}`),
+        ]);
+        if (abort) return;
+        const sitesJson = sitesRes.ok ? await sitesRes.json() : { sites: [] };
+        const machinesJson = machinesRes.ok ? await machinesRes.json() : { rows: [] };
+        const contractsJson = contractsRes.ok ? await contractsRes.json() : { rows: [] };
+        setSites((sitesJson.sites ?? []).map((s: any) => ({
+          id: s.id,
+          label: s.site_name ?? `${s.area ?? ''} ${s.block ?? ''}`.trim() ?? 'Site',
+          is_primary: !!s.is_primary,
+        })));
+        setMachines((machinesJson.rows ?? []).map((m: any) => ({
+          id: m.id,
+          label: `${m.outdoor_model ?? ''}/${m.indoor_model ?? ''} ${m.capacity_hp ? `(${m.capacity_hp}HP)` : ''}`.trim(),
+        })));
+        setContracts((contractsJson.rows ?? []).filter((c: any) => c.status === 'active' || c.status === 'draft').map((c: any) => ({
+          id: c.id, label: `${c.contract_no} (${c.contract_type})`, type: c.contract_type,
+        })));
+      } catch {
+        if (!abort) {
+          setSites([]); setMachines([]); setContracts([]);
+        }
+      }
+    })();
+    return () => { abort = true; };
+  }, [customerId]);
+
+  // Auto-pick primary site when customer changes
+  useEffect(() => {
+    const primary = sites.find((s) => s.is_primary);
+    if (primary) form.setValue('site_id', primary.id);
+  }, [sites]);  // eslint-disable-line react-hooks/exhaustive-deps
+
+  const onSubmit = async (values: MaintenanceRequestInput) => {
+    setServerError(null);
     try {
-      const res = await fetch('/api/operations/jobs', {
+      const res = await fetch('/api/operations/requests', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ request_id: req.id, technician_id: techId || null }),
+        body: JSON.stringify(values),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         throw new Error(body.error ?? `${res.status}`);
       }
       const body = await res.json();
-      router.push(`/operations/jobs/${body.id}`);
+      router.push(`/operations/requests/${body.id}`);
     } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setCreating(false);
+      setServerError((e as Error).message);
     }
   };
 
   return (
-    <>
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <div className="font-mono text-sm text-gray-500">{req.request_no}</div>
-          <h1 className="text-2xl font-bold text-gray-900">{customer?.name_ar ?? '—'}</h1>
+    <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 bg-white p-6 rounded-lg border border-gray-200">
+      {serverError && <Alert variant="destructive">{serverError}</Alert>}
+
+      <div className="grid sm:grid-cols-2 gap-4">
+        <div className="sm:col-span-2">
+          <Label htmlFor="customer_id" required>{t('operations.requests.customer')}</Label>
+          <select
+            id="customer_id"
+            {...form.register('customer_id')}
+            className="w-full h-10 px-3 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white"
+          >
+            <option value="">—</option>
+            {customers.map((c) => (<option key={c.id} value={c.id}>{c.label}</option>))}
+          </select>
         </div>
-        <span className="px-2.5 py-1 rounded-full text-xs bg-amber-50 text-amber-700">
-          {t(`operations.requests.statuses.${req.status}` as any)}
-        </span>
+
+        <div>
+          <Label htmlFor="site_id">{t('operations.requests.site')}</Label>
+          <select
+            id="site_id"
+            {...form.register('site_id')}
+            disabled={!customerId}
+            className="w-full h-10 px-3 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white disabled:bg-gray-50 disabled:text-gray-400"
+          >
+            <option value="">—</option>
+            {sites.map((s) => (<option key={s.id} value={s.id}>{s.label}{s.is_primary ? ' ★' : ''}</option>))}
+          </select>
+        </div>
+
+        <div>
+          <Label htmlFor="customer_machine_id">{t('operations.requests.machine')}</Label>
+          <select
+            id="customer_machine_id"
+            {...form.register('customer_machine_id')}
+            disabled={!customerId}
+            className="w-full h-10 px-3 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white disabled:bg-gray-50 disabled:text-gray-400"
+          >
+            <option value="">—</option>
+            {machines.map((m) => (<option key={m.id} value={m.id}>{m.label}</option>))}
+          </select>
+        </div>
+
+        <div>
+          <Label htmlFor="request_type" required>{t('operations.requests.requestType')}</Label>
+          <select
+            id="request_type"
+            {...form.register('request_type')}
+            className="w-full h-10 px-3 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white"
+          >
+            {REQUEST_TYPES.map((rt) => (
+              <option key={rt} value={rt}>{t(`operations.requestTypes.${rt}` as any) ?? rt}</option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <Label htmlFor="contract_id" required={requestType !== 'CASH'}>
+            {t('operations.requests.contract')}
+          </Label>
+          <select
+            id="contract_id"
+            {...form.register('contract_id')}
+            disabled={!customerId || requestType === 'CASH'}
+            className="w-full h-10 px-3 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white disabled:bg-gray-50 disabled:text-gray-400"
+          >
+            <option value="">—</option>
+            {contracts.map((c) => (<option key={c.id} value={c.id}>{c.label}</option>))}
+          </select>
+          {requestType !== 'CASH' && contracts.length === 0 && customerId && (
+            <p className="text-xs text-amber-700 mt-1">{t('operations.requests.noContractMatch')}</p>
+          )}
+          {form.formState.errors.contract_id && (
+            <p className="text-xs text-red-600 mt-1">{form.formState.errors.contract_id.message as string}</p>
+          )}
+        </div>
+
+        <div>
+          <Label htmlFor="problem_code" required>{t('operations.requests.problem')}</Label>
+          <select
+            id="problem_code"
+            {...form.register('problem_code')}
+            className="w-full h-10 px-3 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white"
+          >
+            {PROBLEM_CODES.filter((p) => p !== 'other' || allowOtherProblem).map((p) => (
+              <option key={p} value={p}>{t(`operations.requests.problemCodes.${p}` as any) ?? p}</option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <Label htmlFor="priority">{t('operations.requests.priority')}</Label>
+          <select
+            id="priority"
+            {...form.register('priority')}
+            className="w-full h-10 px-3 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white"
+          >
+            <option value="low">{t('operations.requests.priorities.low')}</option>
+            <option value="normal">{t('operations.requests.priorities.normal')}</option>
+            <option value="high">{t('operations.requests.priorities.high')}</option>
+            <option value="urgent">{t('operations.requests.priorities.urgent')}</option>
+          </select>
+        </div>
+
+        {problemCode === 'other' && allowOtherProblem && (
+          <div className="sm:col-span-2">
+            <Label htmlFor="problem_description" required>{t('operations.requests.problemDescription')}</Label>
+            <textarea
+              id="problem_description"
+              {...form.register('problem_description')}
+              className="w-full min-h-[80px] px-3 py-2 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white"
+            />
+            {form.formState.errors.problem_description && (
+              <p className="text-xs text-red-600 mt-1">{form.formState.errors.problem_description.message as string}</p>
+            )}
+          </div>
+        )}
+
+        <div>
+          <Label htmlFor="reported_by">{t('operations.requests.reportedBy')}</Label>
+          <Input id="reported_by" {...form.register('reported_by')} />
+        </div>
+        <div>
+          <Label htmlFor="reported_phone">{t('operations.requests.reportedPhone')}</Label>
+          <Input id="reported_phone" {...form.register('reported_phone')} dir="ltr" />
+        </div>
+        <div>
+          <Label htmlFor="scheduled_date">{t('operations.requests.scheduledDate')}</Label>
+          <Input id="scheduled_date" type="date" {...form.register('scheduled_date')} />
+        </div>
+        <div>
+          <Label htmlFor="scheduled_time">{t('operations.requests.scheduledTime')}</Label>
+          <Input id="scheduled_time" type="time" {...form.register('scheduled_time')} />
+        </div>
+
+        <div className="sm:col-span-2">
+          <Label htmlFor="notes">{t('common.notes')}</Label>
+          <textarea
+            id="notes"
+            {...form.register('notes')}
+            className="w-full min-h-[80px] px-3 py-2 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white"
+          />
+        </div>
       </div>
 
-      {error && <Alert variant="destructive">{error}</Alert>}
-
-      <Card className="p-6 space-y-3">
-        <div className="grid sm:grid-cols-2 gap-4 text-sm">
-          <Field label={t('operations.requests.requestType')} value={req.request_type} mono />
-          <Field label={t('operations.requests.priority')} value={t(`operations.requests.priorities.${req.priority}` as any)} />
-          <Field label={t('operations.requests.problem')} value={t(`operations.requests.problemCodes.${req.problem_code}` as any)} />
-          {req.problem_description && <Field label={t('operations.requests.problemDescription')} value={req.problem_description} />}
-          {req.scheduled_date && <Field label={t('operations.requests.scheduledDate')} value={req.scheduled_date} />}
-          {req.scheduled_time && <Field label={t('operations.requests.scheduledTime')} value={req.scheduled_time} />}
-          {req.reported_by && <Field label={t('operations.requests.reportedBy')} value={req.reported_by} />}
-          {req.reported_phone && <Field label={t('operations.requests.reportedPhone')} value={req.reported_phone} />}
-          {site && <Field label={t('operations.requests.site')} value={[site.governorate, site.area, site.block, site.street].filter(Boolean).join(' / ')} />}
-          {machine && <Field label={t('operations.requests.machine')} value={[machine.outdoor_model, machine.indoor_model].filter(Boolean).join(' / ') || '—'} mono />}
-          {contract && <Field label={t('operations.requests.contract')} value={`${contract.contract_no} (${contract.contract_type}${contract.is_4_year ? 'G' : ''})`} mono />}
-        </div>
-        {req.notes && (
-          <div className="pt-2 border-t border-gray-200">
-            <Label>{t('common.notes')}</Label>
-            <p className="text-sm text-gray-700 whitespace-pre-wrap">{req.notes}</p>
-          </div>
-        )}
-      </Card>
-
-      {/* Existing jobs for this request */}
-      <Card className="p-6">
-        <h2 className="font-semibold mb-3">{t('operations.jobs.title')}</h2>
-        {jobs.length === 0 ? (
-          <p className="text-sm text-gray-500 py-3">{t('common.noData')}</p>
-        ) : (
-          <div className="space-y-2">
-            {jobs.map((job) => (
-              <Link key={job.id} href={`/operations/jobs/${job.id}`} className="flex items-center justify-between gap-3 p-3 rounded-lg border border-gray-200 hover:bg-gray-50">
-                <div className="flex items-center gap-2 min-w-0">
-                  <Briefcase className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                  <span className="font-mono text-sm">{job.job_no}</span>
-                  <span className="px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-700">
-                    {t(`operations.jobs.statuses.${job.status}` as any)}
-                  </span>
-                </div>
-                <ArrowRight className="w-4 h-4 text-gray-400 rtl:rotate-180" />
-              </Link>
-            ))}
-          </div>
-        )}
-      </Card>
-
-      {/* Convert to job */}
-      {canCreateJob && req.status !== 'closed' && req.status !== 'cancelled' && (
-        <Card className="p-6 space-y-3">
-          <h2 className="font-semibold">{t('operations.requests.convertToJob')}</h2>
-          <div>
-            <Label htmlFor="tech">{t('operations.jobs.technician')}</Label>
-            <select
-              id="tech"
-              value={techId}
-              onChange={(e) => setTechId(e.target.value)}
-              className="w-full h-10 px-3 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white"
-            >
-              <option value="">— {t('common.optional')} —</option>
-              {technicians.map((tech) => (
-                <option key={tech.id} value={tech.id}>
-                  {(locale === 'ar' ? tech.full_name_ar : tech.full_name_en) ?? tech.full_name_ar ?? '—'}
-                  {tech.technician_id ? ` (${tech.technician_id})` : ''}
-                </option>
-              ))}
-            </select>
-          </div>
-          <Button onClick={convertToJob} disabled={creating}>
-            {creating ? t('common.loading') : t('operations.requests.convertToJob')}
-          </Button>
-        </Card>
-      )}
-    </>
-  );
-}
-
-function Field({ label, value, mono = false }: { label: string; value: React.ReactNode; mono?: boolean }) {
-  return (
-    <div>
-      <div className="text-xs text-gray-500 mb-0.5">{label}</div>
-      <div className={`font-medium ${mono ? 'font-mono text-sm' : ''}`} dir="auto">{value || '—'}</div>
-    </div>
+      <div className="flex items-center gap-2">
+        <Button type="submit" disabled={form.formState.isSubmitting}>
+          {form.formState.isSubmitting ? t('common.loading') : t('common.save')}
+        </Button>
+        <Button type="button" variant="outline" onClick={() => router.back()}>
+          {t('common.cancel')}
+        </Button>
+      </div>
+    </form>
   );
 }

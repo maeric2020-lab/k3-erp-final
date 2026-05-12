@@ -1,11 +1,10 @@
-import type { SupabaseClient } from '@supabase/supabase-js';
-import type { Database, Tables } from '@k3/shared-types';
+import type { K3SupabaseClient, Database, Tables } from '@k3/shared-types';
 
 export type Notification = Tables<'notifications'>;
 export type NotificationPreferences = Tables<'notification_preferences'>;
 
 export class NotificationsRepository {
-  constructor(private readonly db: SupabaseClient<Database>) {}
+  constructor(private readonly db: K3SupabaseClient) {}
 
   /** قائمة الإشعارات للمستخدم الحالي مع pagination */
   async listForCurrent(opts: { unreadOnly?: boolean; limit?: number; offset?: number } = {}): Promise<{ rows: Notification[]; total: number; unread: number }> {

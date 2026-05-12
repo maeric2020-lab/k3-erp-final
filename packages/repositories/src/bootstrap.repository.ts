@@ -1,8 +1,7 @@
-import type { SupabaseClient } from '@supabase/supabase-js';
-import type { Database } from '@k3/shared-types';
+import type { K3SupabaseClient, Database } from '@k3/shared-types';
 
 export class BootstrapRepository {
-  constructor(private readonly db: SupabaseClient<Database>) {}
+  constructor(private readonly db: K3SupabaseClient) {}
 
   /**
    * Returns true if a super_admin already exists.

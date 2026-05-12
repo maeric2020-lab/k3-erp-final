@@ -1,31 +1,41 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { JobsRepository, DocumentLinesRepository } from '@k3/repositories';
+import { customerMachineSchema } from '@k3/validators';
+import { CustomerMachinesRepository } from '@k3/repositories';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
-interface Ctx { params: { id: string } }
-
-export async function GET(_req: NextRequest, { params }: Ctx) {
+export async function GET(req: NextRequest) {
   const supabase = createSupabaseServerClient();
-  const jobs = new JobsRepository(supabase);
-  const lines = new DocumentLinesRepository(supabase);
-  const job = await jobs.getById(params.id);
-  if (!job) return NextResponse.json({ error: 'not found' }, { status: 404 });
-  const jobLines = await lines.listForJob(params.id);
-  return NextResponse.json({ job, lines: jobLines });
+  const { searchParams } = new URL(req.url);
+  const repo = new CustomerMachinesRepository(supabase);
+  try {
+    const customerId = searchParams.get('customer_id');
+    if (customerId) {
+      const rows = await repo.listForCustomer(customerId);
+      return NextResponse.json({ rows, total: rows.length });
+    }
+    const rows = await repo.list({
+      search: searchParams.get('q'),
+      limit: Number(searchParams.get('limit') ?? 50),
+      offset: Number(searchParams.get('offset') ?? 0),
+    });
+    const total = await repo.count({ search: searchParams.get('q') });
+    return NextResponse.json({ rows, total });
+  } catch (e) {
+    return NextResponse.json({ error: (e as Error).message }, { status: 400 });
+  }
 }
 
-export async function PATCH(req: NextRequest, { params }: Ctx) {
-  // Admin-only direct edits to job fields (notes, technician_id reassignment etc.)
-  // Status changes are NOT allowed here — they go through /step.
+export async function POST(req: NextRequest) {
   const supabase = createSupabaseServerClient();
-  const body = await req.json().catch(() => ({}));
-  if ('status' in (body ?? {})) {
-    return NextResponse.json({ error: 'status changes must use /step endpoint' }, { status: 400 });
+  const body = await req.json().catch(() => null);
+  const parsed = customerMachineSchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json({ error: parsed.error.errors[0]?.message ?? 'invalid input' }, { status: 400 });
   }
   try {
-    const repo = new JobsRepository(supabase);
-    const updated = await repo.update(params.id, body as any);
-    return NextResponse.json({ id: updated.id });
+    const repo = new CustomerMachinesRepository(supabase);
+    const created = await repo.create(parsed.data as any);
+    return NextResponse.json({ id: created.id }, { status: 201 });
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 400 });
   }

@@ -1,12 +1,11 @@
-import type { SupabaseClient } from '@supabase/supabase-js';
-import type { Database, Tables } from '@k3/shared-types';
+import type { K3SupabaseClient, Database, Tables } from '@k3/shared-types';
 import { CrudRepository } from './_base';
 
 export type Customer = Tables<'customers'>;
 export type CustomerSite = Tables<'customer_sites'>;
 
 export class CustomersRepository extends CrudRepository<'customers'> {
-  constructor(db: SupabaseClient<Database>) {
+  constructor(db: K3SupabaseClient) {
     super(db, 'customers', ['name_ar', 'name_en', 'phone_primary', 'phone_secondary', 'civil_id', 'code']);
   }
   protected defaultOrderColumn() { return 'created_at'; }
@@ -34,7 +33,7 @@ export class CustomersRepository extends CrudRepository<'customers'> {
 }
 
 export class CustomerSitesRepository extends CrudRepository<'customer_sites'> {
-  constructor(db: SupabaseClient<Database>) {
+  constructor(db: K3SupabaseClient) {
     super(db, 'customer_sites', ['site_name', 'area', 'block', 'street', 'building']);
   }
   protected defaultOrderColumn() { return 'created_at'; }

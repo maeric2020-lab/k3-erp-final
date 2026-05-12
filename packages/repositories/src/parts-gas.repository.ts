@@ -1,12 +1,11 @@
-import type { SupabaseClient } from '@supabase/supabase-js';
-import type { Database, Tables } from '@k3/shared-types';
+import type { K3SupabaseClient, Database, Tables } from '@k3/shared-types';
 import { CrudRepository } from './_base';
 
 export type SparePartMaster = Tables<'spare_parts_master'>;
 export type GasTypeMaster = Tables<'gas_types_master'>;
 
 export class SparePartsMasterRepository extends CrudRepository<'spare_parts_master'> {
-  constructor(db: SupabaseClient<Database>) {
+  constructor(db: K3SupabaseClient) {
     super(db, 'spare_parts_master', ['part_code', 'name_ar', 'name_en', 'model']);
   }
   protected defaultOrderColumn() { return 'created_at'; }
@@ -51,7 +50,7 @@ export class SparePartsMasterRepository extends CrudRepository<'spare_parts_mast
 }
 
 export class GasTypesMasterRepository extends CrudRepository<'gas_types_master'> {
-  constructor(db: SupabaseClient<Database>) {
+  constructor(db: K3SupabaseClient) {
     super(db, 'gas_types_master', []);
   }
   protected defaultOrderColumn() { return 'created_at'; }

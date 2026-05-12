@@ -1,5 +1,4 @@
-import type { SupabaseClient } from '@supabase/supabase-js';
-import type { Database, RequestType } from '@k3/shared-types';
+import type { K3SupabaseClient, Database, RequestType } from '@k3/shared-types';
 import {
   ServicesMasterRepository,
   SparePartsMasterRepository,
@@ -55,7 +54,7 @@ export class LinePickerService {
   private readonly machines: CustomerMachinesRepository;
   private readonly pricing: PricingRepository;
 
-  constructor(private readonly db: SupabaseClient<Database>) {
+  constructor(private readonly db: K3SupabaseClient) {
     this.services = new ServicesMasterRepository(db);
     this.parts = new SparePartsMasterRepository(db);
     this.gases = new GasTypesMasterRepository(db);
@@ -125,7 +124,7 @@ export class LinePickerService {
     const out: PricedPartOption[] = [];
     for (const p of filtered) {
       const priced = await this.pricing.compute({
-        line_type: 'part',
+        line_type: 'spare_part',
         part_id: p.id,
         customer_machine_id: args.customer_machine_id,
         request_type: 'CASH', // request_type doesn't matter for parts

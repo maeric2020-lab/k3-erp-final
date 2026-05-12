@@ -1,5 +1,4 @@
-import type { SupabaseClient } from '@supabase/supabase-js';
-import type { Database } from '@k3/shared-types';
+import type { K3SupabaseClient, Database } from '@k3/shared-types';
 
 export interface DashboardTodayJobs {
   total: number;
@@ -39,7 +38,7 @@ const num = (x: any): number => Number(x ?? 0);
  * office staff with the appropriate screen perms see organisation-wide totals.
  */
 export class DashboardRepository {
-  constructor(private readonly db: SupabaseClient<Database>) {}
+  constructor(private readonly db: K3SupabaseClient) {}
 
   async todayJobs(): Promise<DashboardTodayJobs> {
     const { data, error } = await this.db.rpc('fn_dashboard_today_jobs' as any);

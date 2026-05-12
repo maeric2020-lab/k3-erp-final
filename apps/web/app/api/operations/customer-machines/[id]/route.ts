@@ -1,33 +1,18 @@
-import { NextResponse, type NextRequest } from 'next/server';
-import { customerMachineSchema } from '@k3/validators';
-import { CustomerMachinesRepository } from '@k3/repositories';
+import { NotificationsRepository } from '@k3/repositories';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { withErrorHandler, ApiErrors } from '@/lib/api/error-handler';
 
-interface Ctx { params: { id: string } }
-
-export async function PATCH(req: NextRequest, { params }: Ctx) {
+export const GET = withErrorHandler(async (req: Request) => {
   const supabase = createSupabaseServerClient();
-  const body = await req.json().catch(() => null);
-  const parsed = customerMachineSchema.partial().safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.errors[0]?.message ?? 'invalid input' }, { status: 400 });
-  }
-  try {
-    const repo = new CustomerMachinesRepository(supabase);
-    const updated = await repo.update(params.id, parsed.data as any);
-    return NextResponse.json({ id: updated.id });
-  } catch (e) {
-    return NextResponse.json({ error: (e as Error).message }, { status: 400 });
-  }
-}
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw ApiErrors.unauthorized();
 
-export async function DELETE(_req: NextRequest, { params }: Ctx) {
-  const supabase = createSupabaseServerClient();
-  try {
-    const repo = new CustomerMachinesRepository(supabase);
-    await repo.softDelete(params.id);
-    return NextResponse.json({ ok: true });
-  } catch (e) {
-    return NextResponse.json({ error: (e as Error).message }, { status: 400 });
-  }
-}
+  const url = new URL(req.url);
+  const unreadOnly = url.searchParams.get('unread') === 'true';
+  const limit = Math.min(Number(url.searchParams.get('limit') ?? 50), 100);
+  const offset = Math.max(Number(url.searchParams.get('offset') ?? 0), 0);
+
+  const repo = new NotificationsRepository(supabase);
+  const result = await repo.listForCurrent({ unreadOnly, limit, offset });
+  return Response.json(result);
+});

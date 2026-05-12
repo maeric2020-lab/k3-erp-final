@@ -1,5 +1,4 @@
-import type { SupabaseClient } from '@supabase/supabase-js';
-import type { Database } from '@k3/shared-types';
+import type { K3SupabaseClient, Database } from '@k3/shared-types';
 import {
   ContractsRepository,
   ContractMachinesRepository,
@@ -61,7 +60,7 @@ export class ContractDocumentService {
   private readonly brands: MachineBrandsRepository;
   private readonly refrs: RefrigerantTypesRepository;
 
-  constructor(private readonly db: SupabaseClient<Database>) {
+  constructor(private readonly db: K3SupabaseClient) {
     this.contracts = new ContractsRepository(db);
     this.cm = new ContractMachinesRepository(db);
     this.clauses = new ContractClausesRepository(db);

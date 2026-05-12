@@ -1,11 +1,10 @@
-import type { SupabaseClient } from '@supabase/supabase-js';
-import type { Database, Json, Tables } from '@k3/shared-types';
+import type { K3SupabaseClient, Database, Json, Tables } from '@k3/shared-types';
 
 export type ImportRun = Tables<'import_runs'>;
 export type ImportRunRow = Tables<'import_run_rows'>;
 
 export class ImportsRepository {
-  constructor(private readonly db: SupabaseClient<Database>) {}
+  constructor(private readonly db: K3SupabaseClient) {}
 
   async createRun(input: {
     template_type: string;

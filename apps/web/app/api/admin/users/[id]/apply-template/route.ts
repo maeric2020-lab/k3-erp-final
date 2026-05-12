@@ -1,27 +1,11 @@
-import { NextResponse, type NextRequest } from 'next/server';
-import { z } from 'zod';
-import { UserPermissionsAdminRepository } from '@k3/repositories';
+import { PermissionTemplatesRepository } from '@k3/repositories';
+import { permissionTemplateSchema } from '@k3/validators';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { makeListPostHandlers } from '@/lib/api/master-handlers';
 
-interface Ctx { params: { id: string } }
-
-const schema = z.object({
-  template_id: z.string().uuid(),
-  replace: z.boolean().default(false),
+const handlers = makeListPostHandlers({
+  buildRepo: () => new PermissionTemplatesRepository(createSupabaseServerClient()),
+  schema: permissionTemplateSchema,
 });
-
-export async function POST(req: NextRequest, { params }: Ctx) {
-  const supabase = createSupabaseServerClient();
-  const body = await req.json().catch(() => null);
-  const parsed = schema.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.errors[0]?.message ?? 'invalid input' }, { status: 400 });
-  }
-  try {
-    const repo = new UserPermissionsAdminRepository(supabase);
-    const inserted = await repo.applyTemplate(params.id, parsed.data.template_id, parsed.data.replace);
-    return NextResponse.json({ ok: true, inserted });
-  } catch (e) {
-    return NextResponse.json({ error: (e as Error).message }, { status: 400 });
-  }
-}
+export const GET = handlers.GET;
+export const POST = handlers.POST;

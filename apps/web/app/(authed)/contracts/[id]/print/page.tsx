@@ -1,27 +1,30 @@
 import { requireScreen } from '@/lib/auth/require-screen';
-import { CompanySettingsRepository } from '@k3/repositories';
-import { ContractDocumentService } from '@k3/services';
-import { notFound } from 'next/navigation';
-import { ContractPrintClient } from './contract-print-client';
+import { CustomersRepository } from '@k3/repositories';
+import { ContractForm } from './contract-form';
+import { getTranslations } from 'next-intl/server';
+import Link from 'next/link';
+import { ChevronLeft } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
 
-interface PageProps { params: { id: string } }
-
-export default async function ContractPrintPage({ params }: PageProps) {
-  const ctx = await requireScreen('contracts', 'view');
-  const svc = new ContractDocumentService(ctx.supabase);
-  const settings = new CompanySettingsRepository(ctx.supabase);
-
-  let doc;
-  try {
-    // Materialise default clauses if none exist yet
-    await svc.materialiseClauses(params.id);
-    doc = await svc.assemble(params.id);
-  } catch (e) {
-    notFound();
-  }
-  const company = await settings.get();
-
-  return <ContractPrintClient doc={doc} company={company} />;
+export default async function NewContractPage() {
+  const ctx = await requireScreen('contracts', 'add');
+  const customers = new CustomersRepository(ctx.supabase);
+  const list = await customers.list({ active_only: true, limit: 1000 });
+  const t = await getTranslations();
+  return (
+    <div className="space-y-6 max-w-3xl">
+      <div className="flex items-center gap-2 text-sm text-gray-600">
+        <Link href="/contracts" className="inline-flex items-center hover:text-gray-900">
+          <ChevronLeft className="w-4 h-4 rtl:rotate-180" />
+          {t('operations.contracts.title')}
+        </Link>
+      </div>
+      <h1 className="text-2xl font-bold text-gray-900">{t('operations.contracts.newContract')}</h1>
+      <p className="text-sm text-gray-500">
+        Phase 3: minimal contract creation. The full bilingual letterhead wizard with clause editor is in Phase 4.
+      </p>
+      <ContractForm customers={list.map((c) => ({ id: c.id, label: `${c.name_ar} (${c.code})` }))} />
+    </div>
+  );
 }

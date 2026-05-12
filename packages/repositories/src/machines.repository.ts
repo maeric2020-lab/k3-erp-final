@@ -1,5 +1,4 @@
-import type { SupabaseClient } from '@supabase/supabase-js';
-import type { Database, Tables } from '@k3/shared-types';
+import type { K3SupabaseClient, Database, Tables } from '@k3/shared-types';
 import { CrudRepository } from './_base';
 
 export type MachineCategory = Tables<'machine_categories'>;
@@ -8,7 +7,7 @@ export type RefrigerantType = Tables<'refrigerant_types'>;
 export type MachineMaster = Tables<'machines_master'>;
 
 export class MachineCategoriesRepository extends CrudRepository<'machine_categories'> {
-  constructor(db: SupabaseClient<Database>) {
+  constructor(db: K3SupabaseClient) {
     super(db, 'machine_categories', ['code', 'name_ar', 'name_en']);
   }
   protected defaultOrderColumn() { return 'display_order'; }
@@ -21,7 +20,7 @@ export class MachineCategoriesRepository extends CrudRepository<'machine_categor
 }
 
 export class MachineBrandsRepository extends CrudRepository<'machine_brands'> {
-  constructor(db: SupabaseClient<Database>) {
+  constructor(db: K3SupabaseClient) {
     super(db, 'machine_brands', ['name', 'country_origin']);
   }
   protected defaultOrderColumn() { return 'name'; }
@@ -34,7 +33,7 @@ export class MachineBrandsRepository extends CrudRepository<'machine_brands'> {
 }
 
 export class RefrigerantTypesRepository extends CrudRepository<'refrigerant_types'> {
-  constructor(db: SupabaseClient<Database>) {
+  constructor(db: K3SupabaseClient) {
     super(db, 'refrigerant_types', ['code', 'name']);
   }
   protected defaultOrderColumn() { return 'code'; }
@@ -51,7 +50,7 @@ export class RefrigerantTypesRepository extends CrudRepository<'refrigerant_type
 }
 
 export class MachinesMasterRepository extends CrudRepository<'machines_master'> {
-  constructor(db: SupabaseClient<Database>) {
+  constructor(db: K3SupabaseClient) {
     super(db, 'machines_master', ['outdoor_model', 'indoor_model']);
   }
   protected defaultOrderColumn() { return 'created_at'; }

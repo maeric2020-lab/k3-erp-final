@@ -1,5 +1,4 @@
-import type { SupabaseClient } from '@supabase/supabase-js';
-import type { Database } from '@k3/shared-types';
+import type { K3SupabaseClient, Database } from '@k3/shared-types';
 import { BootstrapRepository } from '@k3/repositories';
 
 /**
@@ -15,7 +14,7 @@ import { BootstrapRepository } from '@k3/repositories';
 export class SetupService {
   private readonly repo: BootstrapRepository;
 
-  constructor(private readonly admin: SupabaseClient<Database>) {
+  constructor(private readonly admin: K3SupabaseClient) {
     this.repo = new BootstrapRepository(admin);
   }
 

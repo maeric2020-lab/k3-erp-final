@@ -1,5 +1,4 @@
-import type { SupabaseClient } from '@supabase/supabase-js';
-import type { Database } from '@k3/shared-types';
+import type { K3SupabaseClient, Database } from '@k3/shared-types';
 import { InvoicesRepository, type Invoice } from '@k3/repositories';
 
 /**
@@ -19,7 +18,7 @@ import { InvoicesRepository, type Invoice } from '@k3/repositories';
 export class InvoicingService {
   private readonly invoices: InvoicesRepository;
 
-  constructor(private readonly db: SupabaseClient<Database>) {
+  constructor(private readonly db: K3SupabaseClient) {
     this.invoices = new InvoicesRepository(db);
   }
 

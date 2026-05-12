@@ -1,60 +1,91 @@
-import { NextResponse, type NextRequest } from 'next/server';
-import { contractMachineSchema } from '@k3/validators';
-import { ContractMachinesRepository, PricingRepository, CustomerMachinesRepository, ContractsRepository } from '@k3/repositories';
+import { UsersProfileRepository } from '@k3/repositories';
+import { MAX_ATTACHMENT_SIZE_BYTES } from '@k3/validators';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { withErrorHandler, ApiErrors, ApiError } from '@/lib/api/error-handler';
+import { validateUpload } from '@/lib/api/file-validation';
+import { checkRateLimit } from '@/lib/rate-limit';
+import { logger } from '@/lib/logger';
 
-interface Ctx { params: { id: string } }
+// صريح: نستخدم Node.js runtime (وليس edge) لأن:
+//   1. multipart/form-data parsing أكثر استقراراً في Node
+//   2. supabase service_role + storage uploads يحتاجان APIs غير متاحة في edge
+//   3. الحجم يصل إلى 25MB — edge محدود
+export const runtime = 'nodejs';
 
-export async function GET(_req: NextRequest, { params }: Ctx) {
+// زمن أقصى للتنفيذ (Vercel Hobby = 10s، Pro = 60s)
+export const maxDuration = 30;
+
+const BUCKET = 'chat-attachments';
+
+export const POST = withErrorHandler(async (req: Request) => {
   const supabase = createSupabaseServerClient();
-  const repo = new ContractMachinesRepository(supabase);
-  const machines = await repo.listForContract(params.id);
-  return NextResponse.json({ machines });
-}
 
-/**
- * POST attaches a customer_machine to the contract. The unit_price_at_signing
- * is computed from contract_pricing via compute_line_pricing — the request
- * body only specifies which machine; pricing comes from the catalog.
- */
-export async function POST(req: NextRequest, { params }: Ctx) {
-  const supabase = createSupabaseServerClient();
-  const body = await req.json().catch(() => null);
-  const parsed = contractMachineSchema.partial({ unit_price_at_signing: true }).safeParse({
-    ...(body ?? {}),
-    contract_id: params.id,
-  });
-  if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.errors[0]?.message ?? 'invalid input' }, { status: 400 });
+  // 1) المصادقة
+  const profiles = new UsersProfileRepository(supabase);
+  const me = await profiles.getCurrent();
+  if (!me) throw ApiErrors.unauthorized();
+
+  // 2) Rate limit (10 رفعات/دقيقة لكل مستخدم — حماية من إغراق التخزين)
+  const rateLimitResp = await checkRateLimit('chat.upload', 10, 60_000, req, { userId: me.id });
+  if (rateLimitResp) return rateLimitResp;
+
+  // 3) parse form
+  const form = await req.formData();
+  const file = form.get('file');
+  const threadId = form.get('thread_id');
+
+  if (!(file instanceof File)) {
+    throw ApiErrors.badRequest('ملف مفقود');
   }
-  try {
-    const contracts = new ContractsRepository(supabase);
-    const machines = new CustomerMachinesRepository(supabase);
-    const pricing = new PricingRepository(supabase);
-    const cm = new ContractMachinesRepository(supabase);
+  if (typeof threadId !== 'string' || !threadId) {
+    throw ApiErrors.badRequest('thread_id مفقود');
+  }
 
-    const contract = await contracts.getById(params.id);
-    if (!contract) return NextResponse.json({ error: 'contract not found' }, { status: 404 });
-    const machine = await machines.getById(parsed.data.customer_machine_id!);
-    if (!machine) return NextResponse.json({ error: 'machine not found' }, { status: 404 });
-
-    // Map (contract_type, is_4_year) → request_type for compute_line_pricing
-    const requestType = contract.is_4_year ? `${contract.contract_type}G` : contract.contract_type;
-    const priced = await pricing.compute({
-      line_type: 'contract_unit',
-      customer_machine_id: machine.id,
-      request_type: requestType,
+  // 4) فحص أمني شامل
+  const validation = await validateUpload(file, MAX_ATTACHMENT_SIZE_BYTES);
+  if (!validation.ok) {
+    logger.warn('upload.rejected', {
+      userId: me.id,
+      threadId,
+      reason: validation.error,
+      mime: file.type,
+      size: file.size,
     });
-
-    const created = await cm.create({
-      contract_id: params.id,
-      customer_machine_id: machine.id,
-      unit_price_at_signing: priced.unit_price,
-      notes: parsed.data.notes ?? null,
-    } as any);
-
-    return NextResponse.json({ id: created.id, unit_price: created.unit_price_at_signing }, { status: 201 });
-  } catch (e) {
-    return NextResponse.json({ error: (e as Error).message }, { status: 400 });
+    throw new ApiError(400, 'invalid_file', validation.error ?? 'ملف غير صالح');
   }
-}
+
+  // 5) رفع إلى التخزين
+  // المسار: {threadId}/{userId}/{timestamp}_{safe-name}
+  const ts = Date.now();
+  const path = `${threadId}/${me.id}/${ts}_${validation.sanitizedName}`;
+  const arrayBuf = await file.arrayBuffer();
+
+  const { error } = await supabase.storage.from(BUCKET).upload(path, arrayBuf, {
+    contentType: file.type || 'application/octet-stream',
+    upsert: false,
+  });
+  if (error) {
+    logger.error('upload.storage_failed', new Error(error.message), {
+      userId: me.id, threadId, path,
+    });
+    throw ApiErrors.serverError('فشل رفع الملف. حاول مرة أخرى.');
+  }
+
+  logger.info('upload.success', {
+    userId: me.id, threadId, path,
+    category: validation.category, size: file.size,
+  });
+
+  return Response.json(
+    {
+      attachment: {
+        name: file.name,
+        mime: file.type || 'application/octet-stream',
+        size: file.size,
+        storage_path: path,
+        category: validation.category,
+      },
+    },
+    { status: 201 }
+  );
+});

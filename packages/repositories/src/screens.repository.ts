@@ -1,5 +1,4 @@
-import type { SupabaseClient } from '@supabase/supabase-js';
-import type { Database, Tables } from '@k3/shared-types';
+import type { K3SupabaseClient, Database, Tables } from '@k3/shared-types';
 
 // المصدر الوحيد لنوع Screen — لا يُكرَّر في أي ملف آخر
 export type Screen = Tables<'screens'>;
@@ -9,7 +8,7 @@ export type Screen = Tables<'screens'>;
  * مصدر وحيد للقراءة من جدول public.screens.
  */
 export class ScreensRepository {
-  constructor(private readonly db: SupabaseClient<Database>) {}
+  constructor(private readonly db: K3SupabaseClient) {}
 
   /** قائمة الشاشات النشطة فقط، مرتَّبة بحسب display_order. */
   async listActive(): Promise<Screen[]> {

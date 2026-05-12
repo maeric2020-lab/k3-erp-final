@@ -1,11 +1,11 @@
-import { PermissionTemplatesRepository } from '@k3/repositories';
-import { permissionTemplateSchema } from '@k3/validators';
+import { ContractClauseTemplatesRepository } from '@k3/repositories';
+import { contractClauseTemplateSchema } from '@k3/validators';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
-import { makeIdHandlers } from '@/lib/api/master-handlers';
+import { makeListPostHandlers } from '@/lib/api/master-handlers';
 
-const handlers = makeIdHandlers({
-  buildRepo: () => new PermissionTemplatesRepository(createSupabaseServerClient()),
-  schema: permissionTemplateSchema,
+const handlers = makeListPostHandlers({
+  buildRepo: () => new ContractClauseTemplatesRepository(createSupabaseServerClient()),
+  schema: contractClauseTemplateSchema,
 });
-export const PATCH = handlers.PATCH;
-export const DELETE = handlers.DELETE;
+export const GET = handlers.GET;
+export const POST = handlers.POST;

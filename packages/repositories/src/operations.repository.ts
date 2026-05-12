@@ -1,5 +1,4 @@
-import type { SupabaseClient } from '@supabase/supabase-js';
-import type { Database, Tables, LineType } from '@k3/shared-types';
+import type { K3SupabaseClient, Database, Tables, LineType } from '@k3/shared-types';
 import { CrudRepository, type ListOptions } from './_base';
 
 export type CustomerMachine = Tables<'customer_machines'>;
@@ -13,7 +12,7 @@ export type DocumentLine = Tables<'document_lines'>;
 // CustomerMachinesRepository
 // -----------------------------------------------------------------------------
 export class CustomerMachinesRepository extends CrudRepository<'customer_machines'> {
-  constructor(db: SupabaseClient<Database>) {
+  constructor(db: K3SupabaseClient) {
     super(db, 'customer_machines', ['outdoor_model', 'indoor_model', 'serial_number']);
   }
 
@@ -43,7 +42,7 @@ export class CustomerMachinesRepository extends CrudRepository<'customer_machine
 // ContractsRepository
 // -----------------------------------------------------------------------------
 export class ContractsRepository extends CrudRepository<'contracts'> {
-  constructor(db: SupabaseClient<Database>) {
+  constructor(db: K3SupabaseClient) {
     super(db, 'contracts', ['contract_no', 'notes']);
   }
 
@@ -81,7 +80,7 @@ export class ContractsRepository extends CrudRepository<'contracts'> {
 // ContractMachinesRepository
 // -----------------------------------------------------------------------------
 export class ContractMachinesRepository extends CrudRepository<'contract_machines'> {
-  constructor(db: SupabaseClient<Database>) {
+  constructor(db: K3SupabaseClient) {
     super(db, 'contract_machines', []);
   }
 
@@ -110,7 +109,7 @@ export class ContractMachinesRepository extends CrudRepository<'contract_machine
 // MaintenanceRequestsRepository
 // -----------------------------------------------------------------------------
 export class MaintenanceRequestsRepository extends CrudRepository<'maintenance_requests'> {
-  constructor(db: SupabaseClient<Database>) {
+  constructor(db: K3SupabaseClient) {
     super(db, 'maintenance_requests', ['request_no', 'reported_by', 'reported_phone', 'notes']);
   }
 
@@ -152,7 +151,7 @@ const STEP_TO_STATUS: Record<JobStep, string> = {
 };
 
 export class JobsRepository extends CrudRepository<'jobs'> {
-  constructor(db: SupabaseClient<Database>) {
+  constructor(db: K3SupabaseClient) {
     super(db, 'jobs', ['job_no', 'technician_notes', 'inspection_notes']);
   }
 
@@ -220,7 +219,7 @@ export class JobsRepository extends CrudRepository<'jobs'> {
 // DocumentLinesRepository
 // -----------------------------------------------------------------------------
 export class DocumentLinesRepository extends CrudRepository<'document_lines'> {
-  constructor(db: SupabaseClient<Database>) {
+  constructor(db: K3SupabaseClient) {
     super(db, 'document_lines', ['description_ar', 'description_en']);
   }
 
@@ -281,7 +280,7 @@ export interface ComputePricingArgs {
 }
 
 export class PricingRepository {
-  constructor(private readonly db: SupabaseClient<Database>) {}
+  constructor(private readonly db: K3SupabaseClient) {}
 
   async compute(args: ComputePricingArgs): Promise<ComputedPrice> {
     const { data, error } = await this.db.rpc('compute_line_pricing' as any, {

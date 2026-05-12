@@ -1,11 +1,11 @@
-import { SparePartCategoriesRepository } from '@k3/repositories';
-import { sparePartCategorySchema } from '@k3/validators';
+import { ServicesMasterRepository } from '@k3/repositories';
+import { serviceMasterSchema } from '@k3/validators';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
-import { makeIdHandlers } from '@/lib/api/master-handlers';
+import { makeListPostHandlers } from '@/lib/api/master-handlers';
 
-const handlers = makeIdHandlers({
-  buildRepo: () => new SparePartCategoriesRepository(createSupabaseServerClient()),
-  schema: sparePartCategorySchema,
+const handlers = makeListPostHandlers({
+  buildRepo: () => new ServicesMasterRepository(createSupabaseServerClient()),
+  schema: serviceMasterSchema,
 });
-export const PATCH = handlers.PATCH;
-export const DELETE = handlers.DELETE;
+export const GET = handlers.GET;
+export const POST = handlers.POST;

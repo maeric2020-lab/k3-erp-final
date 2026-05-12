@@ -1,5 +1,4 @@
-import type { SupabaseClient } from '@supabase/supabase-js';
-import type { Database, Tables } from '@k3/shared-types';
+import type { K3SupabaseClient, Database, Tables } from '@k3/shared-types';
 import { CrudRepository } from './_base';
 
 export type ServiceCategory = Tables<'service_categories'>;
@@ -8,7 +7,7 @@ export type SparePartCategory = Tables<'spare_part_categories'>;
 export type ServiceMaster = Tables<'services_master'>;
 
 export class ServiceCategoriesRepository extends CrudRepository<'service_categories'> {
-  constructor(db: SupabaseClient<Database>) {
+  constructor(db: K3SupabaseClient) {
     super(db, 'service_categories', ['code', 'name_ar', 'name_en']);
   }
   protected defaultOrderColumn() { return 'display_order'; }
@@ -21,7 +20,7 @@ export class ServiceCategoriesRepository extends CrudRepository<'service_categor
 }
 
 export class ServiceTypesRepository extends CrudRepository<'service_types'> {
-  constructor(db: SupabaseClient<Database>) {
+  constructor(db: K3SupabaseClient) {
     super(db, 'service_types', ['code', 'name_ar', 'name_en']);
   }
   protected defaultOrderColumn() { return 'display_order'; }
@@ -66,7 +65,7 @@ export class ServiceTypesRepository extends CrudRepository<'service_types'> {
 }
 
 export class SparePartCategoriesRepository extends CrudRepository<'spare_part_categories'> {
-  constructor(db: SupabaseClient<Database>) {
+  constructor(db: K3SupabaseClient) {
     super(db, 'spare_part_categories', ['code', 'name_ar', 'name_en']);
   }
   protected defaultOrderColumn() { return 'display_order'; }
@@ -83,7 +82,7 @@ export class SparePartCategoriesRepository extends CrudRepository<'spare_part_ca
 }
 
 export class ServicesMasterRepository extends CrudRepository<'services_master'> {
-  constructor(db: SupabaseClient<Database>) {
+  constructor(db: K3SupabaseClient) {
     super(db, 'services_master', ['service_code', 'name_ar', 'name_en', 'technical_code']);
   }
   protected defaultOrderColumn() { return 'created_at'; }

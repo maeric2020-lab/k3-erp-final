@@ -1,5 +1,4 @@
-import type { SupabaseClient } from '@supabase/supabase-js';
-import type { Database, Json } from '@k3/shared-types';
+import type { K3SupabaseClient, Database, Json } from '@k3/shared-types';
 import {
   ServicesMasterRepository,
   ServiceTypesRepository,
@@ -229,7 +228,7 @@ export class ServicePricingImporter implements Importer {
         continue;
       }
 
-      const apply = async (db: SupabaseClient<Database>) => {
+      const apply = async (db: K3SupabaseClient) => {
         const services = new ServicesMasterRepository(db);
         const pricing = new ServicePricingRepository(db);
 

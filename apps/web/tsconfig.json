@@ -1,16 +1,42 @@
-﻿{
+{
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "plugins": [{ "name": "next" }],
+    "noEmit": true,
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ],
     "baseUrl": ".",
+    "noUncheckedIndexedAccess": false,
     "paths": {
-      "@/*": ["./*"],
-      "@k3/shared-types": ["../../packages/shared-types/src/index.ts"],
-      "@k3/repositories": ["../../packages/repositories/src/index.ts"],
-      "@k3/services": ["../../packages/services/src/index.ts"],
-      "@k3/validators": ["../../packages/validators/src/index.ts"]
-    }
+      "@/*": [
+        "./*"
+      ],
+      "@k3/shared-types": [
+        "../../packages/shared-types/src/index.ts"
+      ],
+      "@k3/repositories": [
+        "../../packages/repositories/src/index.ts"
+      ],
+      "@k3/services": [
+        "../../packages/services/src/index.ts"
+      ],
+      "@k3/validators": [
+        "../../packages/validators/src/index.ts"
+      ]
+    },
+    "allowJs": true
   },
-  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
-  "exclude": ["node_modules"]
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    ".next",
+    "../../packages"
+  ]
 }

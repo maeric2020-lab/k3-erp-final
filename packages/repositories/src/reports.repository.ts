@@ -1,5 +1,4 @@
-import type { SupabaseClient } from '@supabase/supabase-js';
-import type { Database } from '@k3/shared-types';
+import type { K3SupabaseClient, Database } from '@k3/shared-types';
 
 export interface SalesReportRow {
   day: string;
@@ -86,7 +85,7 @@ const num = (x: any): number => Number(x ?? 0);
  * see only what they're authorised to see across the underlying tables.
  */
 export class ReportsRepository {
-  constructor(private readonly db: SupabaseClient<Database>) {}
+  constructor(private readonly db: K3SupabaseClient) {}
 
   async sales(fromDate: string, toDate: string): Promise<SalesReportRow[]> {
     const { data, error } = await this.db.rpc('fn_report_sales' as any, {
